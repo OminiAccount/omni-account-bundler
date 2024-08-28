@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/omni-account/client/config"
+	"github.com/omni-account/client/services"
 )
 
 type Processor struct {
@@ -28,7 +29,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 // Start a processor
 func (p *Processor) Start() error {
 	// start rpc server
-
+	services.NewService(&p.cfg.API)
 	return nil
 }
 

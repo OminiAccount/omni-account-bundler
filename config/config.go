@@ -26,10 +26,10 @@ type DBConfig struct {
 
 // APIConfig configures the API server
 type APIConfig struct {
-	Host      string
-	Port      int
-	ZkPools   [][]interface{} `toml:"zk-pools"`
-	Makers    [][]interface{}
+	Host    string
+	Port    int
+	ZkPools [][]interface{} `toml:"zk-pools"`
+	//Makers    [][]interface{}
 	Moralis   []string
 	HeartBeat string `toml:"heart-beat"`
 }

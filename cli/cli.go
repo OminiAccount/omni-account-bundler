@@ -23,16 +23,10 @@ type Cli struct {
 var (
 	ConfigFlag = &cli.StringFlag{
 		Name:    "config",
-		Value:   "../../spv_develop.toml",
+		Value:   "../spv_develop.toml",
 		Aliases: []string{"c"},
 		Usage:   "path to config file",
 		EnvVars: []string{"SPV_CONFIG"},
-	}
-	ProveModeFlag = &cli.UintFlag{
-		Name:    "prove-mode",
-		Value:   0,
-		Aliases: []string{"p"},
-		Usage:   "orbiter-bridge-prove or spv-front-prove?",
 	}
 )
 
@@ -92,7 +86,6 @@ func NewCli(GitVersion string, GitCommit string, GitDate string) *Cli {
 
 	flags := []cli.Flag{
 		ConfigFlag,
-		ProveModeFlag,
 	}
 
 	app := &cli.App{
