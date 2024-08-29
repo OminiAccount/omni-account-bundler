@@ -6,13 +6,12 @@ import (
 	"os"
 )
 
-// Config represents the `spv_develop.toml` file used to configure the processor
+// Config represents the `env.toml` file used to configure the processor
 type Config struct {
-	DB        DBConfig
-	API       APIConfig
-	RPCs      RPCsConfig      `toml:"rpcs"`
-	Contracts ContractsConfig `toml:"contracts"`
-	Instant   InstantConfig
+	Networks []NetworkConfig `toml:"networks"`
+	DB       DBConfig
+	API      APIConfig
+	Instant  InstantConfig
 }
 
 // DBConfig configures the mysql database
@@ -24,27 +23,6 @@ type DBConfig struct {
 	Name     string
 }
 
-// APIConfig configures the API server
-type APIConfig struct {
-	Host    string
-	Port    int
-	ZkPools [][]interface{} `toml:"zk-pools"`
-	//Makers    [][]interface{}
-	Moralis   []string
-	HeartBeat string `toml:"heart-beat"`
-}
-
-// RPCsConfig configures the RPC urls
-type RPCsConfig struct {
-	Ethereum     string `toml:"ethereum"`
-	PolygonZkEVM string `toml:"polygon-zkevm"`
-}
-
-// ContractsConfig configures the contracts address
-type ContractsConfig struct {
-	EntryPoint string `toml:"entry-point"`
-}
-
 // InstantConfig configures the networks submit or commit wait time
 type InstantConfig struct {
 	EthereumSubmitWait     int64 `toml:"ethereum-submit-wait" mapstructure:"ethereum-submit-wait"`
@@ -53,7 +31,7 @@ type InstantConfig struct {
 	PolygonZkEVMCommitWait int64 `mapstructure:"polygon-zkevm-commit-wait"`
 }
 
-// LoadConfig loads the `spv_develop.toml` config file from a given path
+// LoadConfig loads the `develop.toml` config file from a given path
 func LoadConfig(path string) (Config, error) {
 	var conf Config
 

@@ -1,0 +1,29 @@
+networks = [
+    {chain-id = 0,rpc="",entry-point=""},
+    {chain-id = 0,rpc="",entry-point=""},
+]
+
+[db]
+host = ""
+port = 0
+user = ""
+password = ""
+name = ""
+
+[api]
+host = ""
+port = 0
+zk-pools = [
+    {name = "",url = ""},
+]
+
+# block
+moralis = ["",""]
+heart-beat = [
+]
+
+[instant]
+ethereum-submit-wait = 0
+polygon-zkevm-submit-wait = 0
+ethereum-commit-wait = 0
+polygon-zkevm-commit-wait = 0

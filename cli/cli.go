@@ -1,12 +1,12 @@
 package cli
 
 import (
+	"github.com/OAAC/config"
+	"github.com/OAAC/processor"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/omni-account/client/config"
-	"github.com/omni-account/client/processor"
 	"github.com/urfave/cli/v2"
 
-	orLog "github.com/omni-account/client/utils/log"
+	oaLog "github.com/OAAC/utils/log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,19 +23,19 @@ type Cli struct {
 var (
 	ConfigFlag = &cli.StringFlag{
 		Name:    "config",
-		Value:   "../spv_develop.toml",
+		Value:   "../develop.toml",
 		Aliases: []string{"c"},
 		Usage:   "path to config file",
-		EnvVars: []string{"SPV_CONFIG"},
+		EnvVars: []string{"CONFIG"},
 	}
 )
 
-// runProcessor is the entrypoint into the SPV Processor service.
+// runProcessor is the entrypoint into the OAAC(Omni Account Abstraction Client) Processor service.
 func runProcessor(ctx *cli.Context) error {
 	configPath := ctx.String(ConfigFlag.Name)
 	conf, err := config.LoadConfig(configPath)
 
-	log.Info("Starting processor")
+	log.Info("Starting OAAC processor")
 
 	if err != nil {
 		log.Crit("Failed to load config", "message", err)
@@ -43,7 +43,7 @@ func runProcessor(ctx *cli.Context) error {
 
 	processor, err := processor.NewProcessor(conf)
 	if err != nil {
-		log.Error("Unable to create processor", "error", err)
+		log.Error("Unable to create OAAC processor", "error", err)
 		return err
 	}
 
@@ -51,7 +51,7 @@ func runProcessor(ctx *cli.Context) error {
 		return err
 	}
 
-	log.Info("Processor started")
+	log.Info("OAAC Processor started")
 
 	signalChan := make(chan os.Signal)
 	// SIGHUP: terminal closed
@@ -82,7 +82,7 @@ func (c *Cli) Run(args []string) error {
 }
 
 func NewCli(GitVersion string, GitCommit string, GitDate string) *Cli {
-	orLog.SetupDefaults()
+	oaLog.SetupDefaults()
 
 	flags := []cli.Flag{
 		ConfigFlag,
@@ -91,7 +91,7 @@ func NewCli(GitVersion string, GitCommit string, GitDate string) *Cli {
 	app := &cli.App{
 		Name:        "Processor",
 		Version:     "test",
-		Description: "A spv processor",
+		Description: "An OAAC Processor",
 		Commands: []*cli.Command{
 			{
 				Name:        "processor",

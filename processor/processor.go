@@ -2,14 +2,20 @@ package processor
 
 import (
 	"context"
+	"github.com/OAAC/config"
+	"github.com/OAAC/database/leveldb"
+	"github.com/OAAC/server"
+	"github.com/OAAC/services"
+	"github.com/OAAC/utils"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/omni-account/client/config"
-	"github.com/omni-account/client/services"
+	"path/filepath"
 )
 
 type Processor struct {
 	ctx context.Context
 	cfg config.Config
+
+	service *services.Service
 }
 
 var processor *Processor
@@ -18,9 +24,30 @@ var processor *Processor
 func NewProcessor(cfg config.Config) (*Processor, error) {
 	ctx := context.Background()
 
+	// Connect to levelDB
+	levelDBDir, err := filepath.Abs("../../spv_level_db")
+	if _, err = utils.PathExists(levelDBDir); err != nil {
+		return nil, err
+	}
+	levelDB, err := leveldb.NewLevelDB(levelDBDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Init Service
+	serviceConfig, err := services.NewServiceConfig(ctx, levelDB, cfg)
+	if err != nil {
+		return nil, err
+	}
+	service, err := services.NewService(serviceConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	processor = &Processor{
-		ctx: ctx,
-		cfg: cfg,
+		ctx:     ctx,
+		cfg:     cfg,
+		service: service,
 	}
 
 	return processor, nil
@@ -29,7 +56,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 // Start a processor
 func (p *Processor) Start() error {
 	// start rpc server
-	services.NewService(&p.cfg.API)
+	server.NewService(&p.cfg.API)
 	return nil
 }
 

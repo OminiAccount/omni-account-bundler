@@ -1,10 +1,10 @@
-package services
+package server
 
 import (
+	"github.com/OAAC/config"
+	"github.com/OAAC/server/endpoints"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/omni-account/client/config"
-	"github.com/omni-account/client/services/endpoints"
 	"net"
 	"net/http"
 	"strconv"

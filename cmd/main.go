@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/OAAC/cli"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/omni-account/client/cli"
 	"os"
 )
 
