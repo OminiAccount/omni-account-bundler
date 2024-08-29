@@ -18,3 +18,8 @@ type UserOperation struct {
 	MaxPriorityFeePerGas hexutil.Big    `json:"maxPriorityFeePerGas"`
 	PaymasterAndData     hexutil.Bytes  `json:"paymasterAndData"`
 }
+
+type SignedUserOperation struct {
+	UserOperation
+	Signature hexutil.Bytes `json:"signature"`
+}

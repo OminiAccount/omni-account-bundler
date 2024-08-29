@@ -16,16 +16,18 @@ type ServiceConfig struct {
 }
 
 func NewServiceConfig(ctx context.Context, db ethdb.Database, cfg config.Config) (ServiceConfig, error) {
-	var serviceConfig ServiceConfig
-	serviceConfig.Context = ctx
-	serviceConfig.LevelDB = db
-	serviceConfig.zkPools = cfg.API.ZkPools
-	serviceConfig.heartBeat = cfg.API.HeartBeat
+	serviceConfig := ServiceConfig{
+		Context:   ctx,
+		LevelDB:   db,
+		zkPools:   cfg.API.ZkPools,
+		heartBeat: cfg.API.HeartBeat,
+		Networks:  make(map[ChainId]config.NetworkConfig, MaxChainInfoLength),
+	}
 
 	for _, network := range cfg.Networks {
 		chainId := ChainId(network.ChainId)
 		if !chainId.IsSupport() {
-			return serviceConfig, fmt.Errorf("chain id %d is not supported", network.ChainId)
+			return serviceConfig, fmt.Errorf("ChainId %d is not supported", network.ChainId)
 		}
 		serviceConfig.Networks[chainId] = network
 	}

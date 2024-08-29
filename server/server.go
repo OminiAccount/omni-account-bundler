@@ -16,9 +16,9 @@ const DefaultRpcPath = "/"
 func NewService(apiConfig *config.APIConfig) {
 	server := rpc.NewServer()
 
-	myService := new(endpoints.MyBusinessService)
-	svcName := "test"
-	if err := server.RegisterName(svcName, myService); err != nil {
+	aggregateService := new(endpoints.AggregateService)
+	aggregateServiceName := "eth"
+	if err := server.RegisterName(aggregateServiceName, aggregateService); err != nil {
 		panic(err)
 	}
 

@@ -21,9 +21,11 @@ var (
 // supportedChains is a map with all the ChainInfo
 var supportedChains map[ChainId]ChainInfo
 
+const MaxChainInfoLength = 200
+
 // The init function is used to initialize the supportedChains
 func init() {
-	supportedChains = make(map[ChainId]ChainInfo)
+	supportedChains = make(map[ChainId]ChainInfo, MaxChainInfoLength)
 	chains := []ChainInfo{
 		MainnetChain,
 		SepoliaChain,

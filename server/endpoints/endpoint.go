@@ -3,13 +3,14 @@ package endpoints
 import (
 	"context"
 	"fmt"
+	"github.com/OAAC/utils/userOperation"
 )
 
-type MyBusinessService struct{}
+type AggregateService struct{}
 
-func (s *MyBusinessService) Hello(ctx context.Context, name string) (string, error) {
-	if name == "" {
-		return "", fmt.Errorf("name cannot be empty")
+func (s *AggregateService) SendUserOperation(ctx context.Context, signedUserOp userOperation.SignedUserOperation) (string, error) {
+	if len(signedUserOp.Signature) == 0 {
+		return "", fmt.Errorf("invalid signature")
 	}
-	return "Hello, " + name, nil
+	return "Hello", nil
 }

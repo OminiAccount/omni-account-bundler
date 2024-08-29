@@ -11,5 +11,5 @@ type APIConfig struct {
 	Port      int
 	ZkPools   []Rpc `toml:"zk-pools"`
 	Moralis   []string
-	HeartBeat Rpc `toml:"heart-beat"`
+	HeartBeat Rpc `toml:"heart-beat ,omitempty"`
 }
