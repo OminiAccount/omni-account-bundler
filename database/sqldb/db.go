@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	// PoolMigrationName is the name of the migration used by packr to pack the migration file
+	PoolMigrationName = "oaac-pool-db"
+)
+
 type DB struct {
 	gorm         *gorm.DB
 	ChallengesDB database.ChallengesDB

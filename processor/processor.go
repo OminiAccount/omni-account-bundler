@@ -4,7 +4,8 @@ import (
 	"context"
 	"github.com/OAAC/config"
 	"github.com/OAAC/database/leveldb"
-	"github.com/OAAC/server"
+	"github.com/OAAC/jsonrpc"
+	"github.com/OAAC/pool"
 	"github.com/OAAC/services"
 	"github.com/OAAC/utils"
 	"github.com/ethereum/go-ethereum/log"
@@ -15,6 +16,8 @@ type Processor struct {
 	ctx context.Context
 	cfg config.Config
 
+	pool    *pool.Pool
+	server  *jsonrpc.Server
 	service *services.Service
 }
 
@@ -34,6 +37,12 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 		return nil, err
 	}
 
+	// pool
+	poolInstance := createPool(cfg.Pool)
+
+	// jsonrpc
+	server := createJSONRPCServer(cfg.JsonRpc, poolInstance)
+
 	// Init Service
 	serviceConfig, err := services.NewServiceConfig(ctx, levelDB, cfg)
 	if err != nil {
@@ -47,6 +56,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	processor = &Processor{
 		ctx:     ctx,
 		cfg:     cfg,
+		server:  server,
 		service: service,
 	}
 
@@ -56,7 +66,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 // Start a processor
 func (p *Processor) Start() error {
 	// start rpc server
-	server.NewService(&p.cfg.API)
+	p.server.Start()
 	return nil
 }
 

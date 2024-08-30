@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/OAAC/config"
+	"github.com/OAAC/jsonrpc"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -11,16 +12,16 @@ type ServiceConfig struct {
 	Context   context.Context
 	LevelDB   ethdb.Database
 	Networks  map[ChainId]config.NetworkConfig
-	zkPools   []config.Rpc
-	heartBeat config.Rpc
+	zkPools   []jsonrpc.Rpc
+	heartBeat jsonrpc.Rpc
 }
 
 func NewServiceConfig(ctx context.Context, db ethdb.Database, cfg config.Config) (ServiceConfig, error) {
 	serviceConfig := ServiceConfig{
 		Context:   ctx,
 		LevelDB:   db,
-		zkPools:   cfg.API.ZkPools,
-		heartBeat: cfg.API.HeartBeat,
+		zkPools:   cfg.JsonRpc.ZkPools,
+		heartBeat: cfg.JsonRpc.HeartBeat,
 		Networks:  make(map[ChainId]config.NetworkConfig, MaxChainInfoLength),
 	}
 

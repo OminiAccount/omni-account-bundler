@@ -2,6 +2,8 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/OAAC/jsonrpc"
+	"github.com/OAAC/pool"
 	_ "github.com/spf13/viper"
 	"os"
 )
@@ -10,8 +12,9 @@ import (
 type Config struct {
 	Networks []NetworkConfig `toml:"networks"`
 	DB       DBConfig
-	API      APIConfig
+	JsonRpc  jsonrpc.Config `toml:"jsonrpc"`
 	Instant  InstantConfig
+	Pool     pool.Config `toml:"pool"`
 }
 
 // DBConfig configures the mysql database
