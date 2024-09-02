@@ -1,18 +1,22 @@
-package config
+package ethereum
 
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// NetworkConfig configures the network's chainId, rpc and contract's address
-type NetworkConfig struct {
+type Config struct {
+	Networks []Network `toml:"networks"`
+}
+
+// Network configures the network's chainId, rpc and contract's address
+type Network struct {
 	ChainId    uint64         `toml:"chain-id"`
 	Rpc        string         `toml:"rpc"`
 	EntryPoint common.Address `toml:"entry-point"`
 }
 
-func (n *NetworkConfig) UnmarshalTOML(data interface{}) error {
+func (n *Network) UnmarshalTOML(data interface{}) error {
 	// Decode the data into a map
 	m, ok := data.(map[string]interface{})
 	if !ok {

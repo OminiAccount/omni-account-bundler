@@ -1,4 +1,4 @@
-package services
+package chains
 
 // ChainId represents a chain ID as uint64
 type ChainId uint64

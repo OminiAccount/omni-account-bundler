@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/OAAC/ethereum"
 	"github.com/OAAC/jsonrpc"
 	"github.com/OAAC/pool"
 	_ "github.com/spf13/viper"
@@ -10,9 +11,9 @@ import (
 
 // Config represents the `env.toml` file used to configure the processor
 type Config struct {
-	Networks []NetworkConfig `toml:"networks"`
-	DB       DBConfig
-	JsonRpc  jsonrpc.Config `toml:"jsonrpc"`
+	Ethereum ethereum.Config `toml:"ethereum"`
+	DB       DBConfig        `toml:"db"`
+	JsonRpc  jsonrpc.Config  `toml:"jsonrpc"`
 	Instant  InstantConfig
 	Pool     pool.Config `toml:"pool"`
 }

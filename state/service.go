@@ -1,17 +1,20 @@
-package services
+package state
 
 import (
 	"context"
 	"fmt"
 	"github.com/OAAC/config"
+	"github.com/OAAC/ethereum"
 	"github.com/OAAC/jsonrpc"
+	"github.com/OAAC/synchronizer"
+	"github.com/OAAC/utils/chains"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type ServiceConfig struct {
 	Context   context.Context
 	LevelDB   ethdb.Database
-	Networks  map[ChainId]config.NetworkConfig
+	Networks  map[chains.ChainId]ethereum.Network
 	zkPools   []jsonrpc.Rpc
 	heartBeat jsonrpc.Rpc
 }
@@ -22,11 +25,11 @@ func NewServiceConfig(ctx context.Context, db ethdb.Database, cfg config.Config)
 		LevelDB:   db,
 		zkPools:   cfg.JsonRpc.ZkPools,
 		heartBeat: cfg.JsonRpc.HeartBeat,
-		Networks:  make(map[ChainId]config.NetworkConfig, MaxChainInfoLength),
+		Networks:  make(map[chains.ChainId]ethereum.Network, chains.MaxChainInfoLength),
 	}
 
-	for _, network := range cfg.Networks {
-		chainId := ChainId(network.ChainId)
+	for _, network := range cfg.Ethereum.Networks {
+		chainId := chains.ChainId(network.ChainId)
 		if !chainId.IsSupport() {
 			return serviceConfig, fmt.Errorf("ChainId %d is not supported", network.ChainId)
 		}
@@ -41,8 +44,10 @@ type Service struct {
 	ctx    context.Context
 	cancel func()
 
+	synchronizer *synchronizer.Synchronizer
+
 	// collect Tickets
-	collectTicketsChannel *CollectTicketsChannel
+	//collectTicketsChannel *CollectTicketsChannel
 	// Submit a challenge to the zk-pool
 	//submitChallengesChannel *SubmitChallengesChannel
 	// Commit a challenge to the contract
