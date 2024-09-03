@@ -9,64 +9,68 @@ import (
 type Pool struct {
 	mu            sync.Mutex
 	userOps       []SignedUserOperation
-	tickets       []Ticket
+	tickets       []TicketFull
 	cfg           Config
 	lastFlushTime time.Time
+	context       chan BatchContext
 }
 
 func NewMemoryPool(cfg Config) *Pool {
-	return &Pool{
+	pool := &Pool{
 		userOps:       []SignedUserOperation{},
-		tickets:       []Ticket{},
+		tickets:       []TicketFull{},
 		cfg:           cfg,
 		lastFlushTime: time.Now(),
+		context:       make(chan BatchContext, 100),
+	}
+
+	// mock
+	pool.mockPool()
+
+	return pool
+}
+
+func (p *Pool) AddUserOp(op SignedUserOperation) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.userOps = append(p.userOps, op)
+	p.CheckFlush()
+}
+
+func (p *Pool) AddTicket(ticket TicketFull) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.tickets = append(p.tickets, ticket)
+	p.CheckFlush()
+}
+
+func (p *Pool) CheckFlush() {
+	if uint64(len(p.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
+		p.Flush()
 	}
 }
 
-func (mp *Pool) AddUserOp(op SignedUserOperation) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.userOps = append(mp.userOps, op)
-	mp.checkFlush()
-}
-
-func (mp *Pool) AddTicket(ticket Ticket) {
-	mp.mu.Lock()
-	defer mp.mu.Unlock()
-
-	mp.tickets = append(mp.tickets, ticket)
-	mp.checkFlush()
-}
-
-func (mp *Pool) checkFlush() {
-	if uint64(len(mp.userOps)) >= mp.cfg.maxOps || time.Since(mp.lastFlushTime) >= mp.cfg.flushInterval {
-		mp.Flush()
-	}
-}
-
-func (mp *Pool) Flush() {
+func (p *Pool) Flush() {
 	fmt.Println("Flushing memory pool...")
 
-	userOps := mp.userOps
-	tickets := mp.tickets
+	context := BatchContext{
+		userOps: p.userOps,
+		tickets: p.tickets,
+	}
 
 	// Empty the memory pool
-	mp.userOps = []SignedUserOperation{}
-	mp.tickets = []Ticket{}
-	mp.lastFlushTime = time.Now()
+	p.userOps = []SignedUserOperation{}
+	p.tickets = []TicketFull{}
+	p.lastFlushTime = time.Now()
 
 	// Execute specific processing logic
-	fmt.Println("UserOps:", userOps)
-	fmt.Println("Tickets:", tickets)
+	fmt.Println("UserOps:", context.userOps)
+	fmt.Println("Tickets:", context.tickets)
+	p.context <- context
 }
-func (mp *Pool) StartAutoFlush() {
-	ticker := time.NewTicker(1 * time.Second)
-	go func() {
-		for range ticker.C {
-			mp.mu.Lock()
-			mp.checkFlush()
-			mp.mu.Unlock()
-		}
-	}()
+
+func (p *Pool) Context() chan BatchContext {
+	return p.context
 }

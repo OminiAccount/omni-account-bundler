@@ -7,11 +7,12 @@ import (
 )
 
 type EthEndpoints struct {
-	pool types.PoolInterface
+	pool  types.PoolInterface
+	state types.StateInterface
 }
 
-func NewEthEndpoints(p types.PoolInterface) *EthEndpoints {
-	return &EthEndpoints{p}
+func NewEthEndpoints(p types.PoolInterface, s types.StateInterface) *EthEndpoints {
+	return &EthEndpoints{p, s}
 }
 
 func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) error {
@@ -21,4 +22,8 @@ func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) 
 	}
 	e.pool.AddUserOp(signedUserOp)
 	return nil
+}
+
+func (e *EthEndpoints) GetBatchProof() (interface{}, error) {
+	return e.state.GetBatchProof()
 }

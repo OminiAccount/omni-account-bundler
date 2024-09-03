@@ -6,7 +6,17 @@ import (
 )
 
 type Config struct {
-	Networks []Network `toml:"networks"`
+	Networks    []Network            `toml:"networks"`
+	PrivateKeys []KeystoreFileConfig `toml:"private_keys"`
+}
+
+// KeystoreFileConfig has all the information needed to load a private key from a key store file
+type KeystoreFileConfig struct {
+	// Path is the file path for the key store file
+	Path string `toml:"path"`
+
+	// Password is the password to decrypt the key store file
+	Password string `toml:"password"`
 }
 
 // Network configures the network's chainId, rpc and contract's address

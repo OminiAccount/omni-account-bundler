@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // MerkleNodeValue represents the value of each node in the Merkle tree
@@ -172,8 +173,8 @@ func (zmt *ZeroMerkleTree) GetLeaf(index int) MerkleProof {
 }
 
 // GetRoot returns the root of the Merkle tree
-func (zmt *ZeroMerkleTree) GetRoot() MerkleNodeValue {
-	return zmt.NodeStore.Get(0, 0)
+func (zmt *ZeroMerkleTree) GetRoot() common.Hash {
+	return common.HexToHash(string(zmt.NodeStore.Get(0, 0)))
 }
 
 // ComputeMerkleRootFromProof computes the Merkle root from a proof

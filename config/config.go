@@ -3,7 +3,7 @@ package config
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/OAAC/ethereum"
-	"github.com/OAAC/jsonrpc"
+	"github.com/OAAC/jsonrpc/rpcs"
 	"github.com/OAAC/pool"
 	_ "github.com/spf13/viper"
 	"os"
@@ -13,7 +13,7 @@ import (
 type Config struct {
 	Ethereum ethereum.Config `toml:"ethereum"`
 	DB       DBConfig        `toml:"db"`
-	JsonRpc  jsonrpc.Config  `toml:"jsonrpc"`
+	JsonRpc  rpcs.RpcsConfig `toml:"jsonrpc"`
 	Instant  InstantConfig
 	Pool     pool.Config `toml:"pool"`
 }

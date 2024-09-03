@@ -19,10 +19,10 @@ func TestKey(t *testing.T) {
 	nonceKey := computeLeafKey(userAddress, nonce)
 	fmt.Printf("Nonce Key: %v\n", nonceKey)
 
-	balanceKey2 := computeBalanceKey(userAddress)
+	balanceKey2 := ComputeBalanceKey(userAddress)
 	fmt.Printf("Balance Key2: %v\n", balanceKey2)
 
-	nonceKey2 := computeNonceKey(userAddress, 42)
+	nonceKey2 := ComputeNonceKey(userAddress, 42)
 	fmt.Printf("Nonce Key2: %v\n", nonceKey2)
 
 	if balanceKey == balanceKey2 && nonceKey == nonceKey2 {

@@ -13,8 +13,12 @@ const (
 )
 
 type Ticket struct {
-	User      common.Address
-	Amount    *hexutil.Big
-	TimeStamp uint64
-	Type      TicketType
+	User      common.Address `json:"user"`
+	Amount    *hexutil.Big   `json:"amount"`
+	TimeStamp uint64         `json:"timestamp"`
+}
+
+type TicketFull struct {
+	Ticket
+	Type TicketType
 }

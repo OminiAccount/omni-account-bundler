@@ -46,12 +46,12 @@ func computeLeafKey(userAddress []byte, value LeafValue) string {
 	return hex.EncodeToString(leafKey)
 }
 
-func computeBalanceKey(userAddress []byte) string {
+func ComputeBalanceKey(userAddress []byte) string {
 	balance := Balance{Amount: uint256.MustFromHex(hexutil.EncodeUint64(0))} // The Amount value here is not important in this case
 	return computeLeafKey(userAddress, balance)
 }
 
-func computeNonceKey(userAddress []byte, chainId uint64) string {
+func ComputeNonceKey(userAddress []byte, chainId uint64) string {
 	nonce := Nonce{Value: 0, ChainId: chainId}
 	return computeLeafKey(userAddress, nonce)
 }
@@ -65,11 +65,11 @@ func toBytes(val uint64) []byte {
 	return bytes
 }
 
-func keyToIndex(key string) int64 {
+func KeyToIndex(key string) int {
 	truncatedStr := key[len(key)-8:]
 	index, err := hex.DecodeString(truncatedStr)
 	if err != nil {
 		panic("Invalid hex string")
 	}
-	return int64(index[0])<<24 + int64(index[1])<<16 + int64(index[2])<<8 + int64(index[3])
+	return int(int64(index[0])<<24 + int64(index[1])<<16 + int64(index[2])<<8 + int64(index[3]))
 }

@@ -1,12 +1,12 @@
-package jsonrpc
+package rpcs
 
 type Rpc struct {
 	name string
 	url  string
 }
 
-// Config configures the JsonRpc server
-type Config struct {
+// RpcsConfig configures the JsonRpc server
+type RpcsConfig struct {
 	Host      string
 	Port      int
 	ZkPools   []Rpc `toml:"zk-pools"`

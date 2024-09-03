@@ -1,6 +1,7 @@
 package jsonrpc
 
 import (
+	"github.com/OAAC/jsonrpc/rpcs"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"net"
@@ -16,7 +17,7 @@ const (
 )
 
 type Server struct {
-	cfg Config
+	cfg rpcs.RpcsConfig
 	srv *rpc.Server
 }
 
@@ -25,7 +26,7 @@ type Service struct {
 	Service interface{}
 }
 
-func NewServer(cfg Config, service Service) *Server {
+func NewServer(cfg rpcs.RpcsConfig, service Service) *Server {
 	server := rpc.NewServer()
 
 	if err := server.RegisterName(service.Name, service.Service); err != nil {

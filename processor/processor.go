@@ -22,7 +22,7 @@ type Processor struct {
 	server       *jsonrpc.Server
 	ethereum     *ethereum.Ethereum
 	synchronizer *synchronizer.Synchronizer
-	service      *state.Service
+	state        *state.State
 }
 
 var processor *Processor
@@ -45,20 +45,6 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	poolInstance := createPool(cfg.Pool)
 	log.Info("Pool successfully initialized")
 
-	// jsonrpc
-	server := createJSONRPCServer(cfg.JsonRpc, poolInstance)
-	log.Info("JSONRPCServer successfully initialized")
-
-	// Init Service
-	serviceConfig, err := state.NewServiceConfig(ctx, levelDB, cfg)
-	if err != nil {
-		return nil, err
-	}
-	service, err := state.NewService(serviceConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	// Ethereum
 	ethereum, err := ethereum.NewEthereum(cfg.Ethereum)
 	if err != nil {
@@ -73,13 +59,27 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	}
 	log.Info("Synchronizer successfully initialized")
 
+	// Init State
+	stateConfig, err := state.NewConfig(ctx, levelDB, cfg)
+	if err != nil {
+		return nil, err
+	}
+	state, err := state.NewState(stateConfig, poolInstance)
+	if err != nil {
+		return nil, err
+	}
+
+	// jsonrpc
+	server := createJSONRPCServer(cfg.JsonRpc, poolInstance, state)
+	log.Info("JSONRPCServer successfully initialized")
+
 	processor = &Processor{
 		ctx:          ctx,
 		cfg:          cfg,
 		server:       server,
 		ethereum:     ethereum,
 		synchronizer: synchronizer,
-		service:      service,
+		state:        state,
 	}
 
 	return processor, nil
@@ -89,7 +89,9 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 func (p *Processor) Start() error {
 	// start rpc server
 	p.server.Start()
-	go p.synchronizer.Sync()
+	p.synchronizer.Start()
+	p.state.Start()
+
 	return nil
 }
 
@@ -98,6 +100,7 @@ func (p *Processor) Stop() {
 	log.Warn("Stopping processor")
 	//p.service.Stop()
 	p.synchronizer.Stop()
+	p.state.Stop()
 	log.Warn("Processor stopped")
 
 }
