@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/OAAC/jsonrpc/types"
 	"github.com/OAAC/pool"
+	"github.com/OAAC/state"
 )
 
 type EthEndpoints struct {
@@ -26,4 +27,8 @@ func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) 
 
 func (e *EthEndpoints) GetBatchProof() (interface{}, error) {
 	return e.state.GetBatchProof()
+}
+
+func (e *EthEndpoints) SetBatchProofResult(result state.ProofResult) error {
+	return e.state.SetBatchProofResult(&result)
 }
