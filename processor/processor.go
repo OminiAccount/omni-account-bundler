@@ -64,7 +64,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, err := state.NewState(stateConfig, poolInstance)
+	state, err := state.NewState(stateConfig, poolInstance, ethereum)
 	if err != nil {
 		return nil, err
 	}

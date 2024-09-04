@@ -26,13 +26,14 @@ type State struct {
 	logger      log.Logger
 }
 
-func NewState(sc Config, pool PoolInterface) (*State, error) {
+func NewState(sc Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
 	ctx, cancel := context.WithCancel(sc.Context)
 	state := &State{
 		cfg:         sc,
 		ctx:         ctx,
 		cancel:      cancel,
 		pool:        pool,
+		ethereum:    ethereum,
 		tree:        smt.NewZeroMerkleTree(50),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
