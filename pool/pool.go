@@ -2,6 +2,7 @@ package pool
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"sync"
 	"time"
 )
@@ -13,6 +14,8 @@ type Pool struct {
 	cfg           Config
 	lastFlushTime time.Time
 	context       chan BatchContext
+
+	logger log.Logger
 }
 
 func NewMemoryPool(cfg Config) *Pool {
@@ -22,6 +25,7 @@ func NewMemoryPool(cfg Config) *Pool {
 		cfg:           cfg,
 		lastFlushTime: time.Now(),
 		context:       make(chan BatchContext, 100),
+		logger:        log.New("service", "pool"),
 	}
 
 	// mock
@@ -34,6 +38,8 @@ func (p *Pool) AddUserOp(op SignedUserOperation) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	p.logger.Info("Add a new userOp", "userOp", op)
+
 	p.userOps = append(p.userOps, op)
 	p.CheckFlush()
 }
@@ -41,6 +47,8 @@ func (p *Pool) AddUserOp(op SignedUserOperation) {
 func (p *Pool) AddTicket(ticket TicketFull) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	p.logger.Info("Add a new ticket", "ticket", ticket)
 
 	p.tickets = append(p.tickets, ticket)
 	p.CheckFlush()

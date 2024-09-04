@@ -139,12 +139,32 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	var depositTickets, withdrawTickets []pool.Ticket
 
 	for _, ticketFull := range batchContext.Tickets() {
+		var balance big.Int
+		balanceKey := smt.ComputeBalanceKey(ticketFull.User.Bytes())
+		balanceKeyIndex := smt.KeyToIndex(balanceKey)
+		balanceMerkleProof := s.tree.GetLeaf(balanceKeyIndex)
+		balance.SetString(string(balanceMerkleProof.Value), 16)
+		fmt.Println("Ticket oldBalance", balance)
+
+		actionAmount := ticketFull.Amount.ToInt()
 		switch ticketFull.Type {
+		// balance + actionAmount
 		case pool.Deposit:
 			depositTickets = append(depositTickets, ticketFull.Ticket)
+			balance.Add(&balance, actionAmount)
+		// balance - actionAmount (if balance >= actionAmount)
 		case pool.Withdraw:
 			withdrawTickets = append(withdrawTickets, ticketFull.Ticket)
+			remainBalance := balance.Cmp(actionAmount)
+			if remainBalance < 0 {
+				return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
+			}
+			balance.Sub(&balance, actionAmount)
 		}
+		fmt.Println("Ticket newBalance", balance)
+
+		// Set newBalance
+		s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
 	}
 
 	batch.SetDepositTickets(depositTickets)
