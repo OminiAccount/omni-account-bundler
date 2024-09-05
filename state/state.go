@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/OAAC/pool"
+	"github.com/OAAC/state/types"
 	"github.com/OAAC/utils/queue"
 	"github.com/OAAC/utils/smt"
 	"github.com/ethereum/go-ethereum/common"
@@ -23,7 +24,10 @@ type State struct {
 	tree        *smt.ZeroMerkleTree
 	proofQueue  *queue.ConcurrentQueue[Batch]
 	provenQueue *queue.ConcurrentQueue[ProofResult]
-	logger      log.Logger
+
+	storage *Storage
+
+	logger log.Logger
 }
 
 func NewState(sc Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
@@ -37,6 +41,8 @@ func NewState(sc Config, pool PoolInterface, ethereum EthereumInterface) (*State
 		tree:        smt.NewZeroMerkleTree(50),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
+
+		storage: NewStorage(),
 
 		logger: log.New("service", "state"),
 	}
@@ -206,4 +212,8 @@ func (s *State) executeBatch() error {
 	}
 
 	return nil
+}
+
+func (s *State) AddNewMapping(mapping types.AccountMapping) error {
+	return s.storage.Account.AddNewMapping(mapping)
 }

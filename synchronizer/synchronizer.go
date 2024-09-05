@@ -3,6 +3,7 @@ package synchronizer
 import (
 	"context"
 	"github.com/OAAC/pool"
+	stateTypes "github.com/OAAC/state/types"
 	"github.com/OAAC/synchronizer/types"
 	"github.com/OAAC/utils/chains"
 	"github.com/ethereum/go-ethereum/log"
@@ -13,6 +14,7 @@ import (
 type Synchronizer struct {
 	pool  types.PoolInterface
 	ether types.EthereumInterface
+	state types.StateInterface
 	cfg   Config
 
 	logger    log.Logger
@@ -22,11 +24,13 @@ type Synchronizer struct {
 
 func NewSynchronizer(pool types.PoolInterface,
 	ethereum types.EthereumInterface,
+	state types.StateInterface,
 	cfg Config) (*Synchronizer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Synchronizer{
 		pool:      pool,
 		ether:     ethereum,
+		state:     state,
 		cfg:       cfg,
 		logger:    log.New("service", "synchronizer"),
 		ctx:       ctx,
@@ -35,7 +39,7 @@ func NewSynchronizer(pool types.PoolInterface,
 }
 
 func (s *Synchronizer) Start() {
-	go s.sync()
+	s.sync()
 }
 
 func (s *Synchronizer) Stop() {
@@ -45,6 +49,11 @@ func (s *Synchronizer) Stop() {
 
 func (s *Synchronizer) sync() {
 	s.logger.Info("Sync start")
+	go s.syncTickets()
+	go s.syncAccountCreated()
+}
+
+func (s *Synchronizer) syncTickets() {
 	// start all chains tickets sync
 	var chans []<-chan pool.TicketFull
 
@@ -77,6 +86,34 @@ func (s *Synchronizer) sync() {
 			}
 			s.logger.Info("Synchronize to a new ticket")
 			s.pool.AddTicket(ticket)
+		case <-s.ctx.Done():
+			s.logger.Warn("Stopping Sync due to context cancellation")
+			return
+		default:
+		}
+	}
+}
+
+func (s *Synchronizer) syncAccountCreated() {
+	ch := make(chan stateTypes.AccountMapping)
+
+	go func(ch chan stateTypes.AccountMapping) {
+		if err := s.ether.WatchAAFactoryEvent(s.ctx, 0, ch); err != nil {
+			s.logger.Error("Failed to start event listener", "error", err)
+		}
+	}(ch)
+
+	for {
+		select {
+		case mapping, ok := <-ch:
+			if !ok {
+				return
+			}
+			s.logger.Info("Synchronize to a new account mapping")
+			err := s.state.AddNewMapping(mapping)
+			if err != nil {
+				s.logger.Warn("Add a new account mapping error", "error", err)
+			}
 		case <-s.ctx.Done():
 			s.logger.Warn("Stopping Sync due to context cancellation")
 			return

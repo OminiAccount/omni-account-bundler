@@ -17,7 +17,6 @@ func NewEthEndpoints(p types.PoolInterface, s types.StateInterface) *EthEndpoint
 }
 
 func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) error {
-	// ctx := context.Background()
 	if len(signedUserOp.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
 	}

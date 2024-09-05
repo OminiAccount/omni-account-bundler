@@ -52,13 +52,6 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	}
 	log.Info("Ethereum successfully initialized")
 
-	// Synchronizer
-	synchronizer, err := synchronizer.NewSynchronizer(poolInstance, ethereum, synchronizer.Config{EthereumCfg: cfg.Ethereum})
-	if err != nil {
-		return nil, err
-	}
-	log.Info("Synchronizer successfully initialized")
-
 	// Init State
 	stateConfig, err := state.NewConfig(ctx, levelDB, cfg)
 	if err != nil {
@@ -68,6 +61,13 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Synchronizer
+	synchronizer, err := synchronizer.NewSynchronizer(poolInstance, ethereum, state, synchronizer.Config{EthereumCfg: cfg.Ethereum})
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Synchronizer successfully initialized")
 
 	// jsonrpc
 	server := createJSONRPCServer(cfg.JsonRpc, poolInstance, state)

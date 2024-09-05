@@ -6,8 +6,9 @@ import (
 )
 
 type Config struct {
-	Networks    []Network            `toml:"networks"`
-	PrivateKeys []KeystoreFileConfig `toml:"private_keys"`
+	Networks       []Network            `toml:"networks"`
+	PrivateKeys    []KeystoreFileConfig `toml:"private_keys"`
+	AccountFactory common.Address       `toml:"account-factory"`
 }
 
 // KeystoreFileConfig has all the information needed to load a private key from a key store file

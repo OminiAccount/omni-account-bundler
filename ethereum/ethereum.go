@@ -3,8 +3,10 @@ package ethereum
 import (
 	"context"
 	"fmt"
-	EntryPoint "github.com/OAAC/ethereum/contracts"
+	"github.com/OAAC/ethereum/contracts/EntryPoint"
+	"github.com/OAAC/ethereum/contracts/SimpleAccountFactory"
 	"github.com/OAAC/pool"
+	"github.com/OAAC/state/types"
 	"github.com/OAAC/utils/chains"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -19,8 +21,9 @@ type Client struct {
 }
 
 type Ethereum struct {
-	ChainsClient map[chains.ChainId]*Client
-	auth         map[common.Address]bind.TransactOpts
+	ChainsClient   map[chains.ChainId]*Client
+	AccountFactory *SimpleAccountFactory.SimpleAccountFactory // We only need to listen to the aa contract of the main chain.
+	auth           map[common.Address]bind.TransactOpts
 
 	sender  common.Address
 	chainId uint64
@@ -35,6 +38,8 @@ func NewEthereum(cfg Config) (*Ethereum, error) {
 		auth:         map[common.Address]bind.TransactOpts{},
 		logger:       log.New("service", "ethereum"),
 	}
+	ethereum.chainId = cfg.Networks[0].ChainId
+
 	for _, network := range cfg.Networks {
 		chainId := chains.ChainId(network.ChainId)
 		client, err := Dial(network.Rpc)
@@ -52,13 +57,17 @@ func NewEthereum(cfg Config) (*Ethereum, error) {
 			return nil, err
 		}
 
+		if ethereum.chainId == network.ChainId {
+			if ethereum.AccountFactory, err = SimpleAccountFactory.NewSimpleAccountFactory(cfg.AccountFactory, wsClient); err != nil {
+				return nil, err
+			}
+		}
+
 		ethereum.ChainsClient[chainId] = &Client{
 			EthClient:  client,
 			EntryPoint: entryPoint,
 		}
 	}
-
-	ethereum.chainId = cfg.Networks[0].ChainId
 
 	for _, key := range cfg.PrivateKeys {
 		opts, _, err := ethereum.LoadAuthFromKeyStore(key.Path, key.Password, ethereum.chainId)
@@ -141,4 +150,34 @@ func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hex
 
 	ether.logger.Info("update entryPoint root", "entryPoint", entryPoint)
 	return nil
+}
+
+func (ether *Ethereum) WatchAAFactoryEvent(ctx context.Context, fromBlock uint64, accountMappingChannel chan<- types.AccountMapping) error {
+	opts := &bind.WatchOpts{
+		Start:   &fromBlock,
+		Context: ctx,
+	}
+
+	accountCreatedChannel := make(chan *SimpleAccountFactory.SimpleAccountFactoryAccountCreated)
+	accountCreatedSubscription, err := ether.AccountFactory.WatchAccountCreated(opts, accountCreatedChannel, nil)
+	if err != nil {
+		return err
+	}
+	defer accountCreatedSubscription.Unsubscribe()
+
+	for {
+		select {
+		case err = <-accountCreatedSubscription.Err():
+			ether.logger.Crit("Failed to subscribe to accountCreated", "error", err)
+		case event := <-accountCreatedChannel:
+			ether.logger.Debug("Received accountCreated event", "event", event)
+			mapping := types.AccountMapping{
+				User:    event.Owner,
+				Account: event.Account,
+			}
+			accountMappingChannel <- mapping
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
