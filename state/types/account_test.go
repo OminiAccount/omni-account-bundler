@@ -18,7 +18,7 @@ func TestUserAccount_AddNewMapping(t *testing.T) {
 	err = userAccounts.AddNewMapping(AccountMapping{user, account2})
 	assert.Error(t, err, "max number")
 
-	accounts, err := userAccounts.getAccountsForUser(user)
+	accounts, err := userAccounts.GetAccountsForUser(user)
 	assert.NoError(t, err, "There should be no error when getting user accounts")
 	assert.Len(t, *accounts, 1, "User should have 1 account mappings")
 

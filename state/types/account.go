@@ -2,7 +2,6 @@ package types
 
 import (
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -40,23 +39,17 @@ func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
 	return nil
 }
 
-// Iterate and print all account information for a given user
-func (u *UserAccount) getAccountsForUser(user common.Address) (*[]common.Address, error) {
+// GetAccountsForUser Iterate and print all account information for a given user
+func (u *UserAccount) GetAccountsForUser(user common.Address) *[]common.Address {
 	accountsInfo, exists := (*u)[user]
 	if !exists {
-		return nil, fmt.Errorf("no account mappings exist for this user")
+		return nil
 	}
 
-	fmt.Printf("user %s account:\n", user.Hex())
 	var accounts []common.Address
-	for account, info := range accountsInfo {
-		fmt.Printf("Account: %s, Nonce: %d\n", account.Hex(), info.Nonce)
+	for account := range accountsInfo {
 		accounts = append(accounts, account)
 	}
 
-	return &accounts, nil
-}
-
-func (u *UserAccount) accountSaveInDisk() {
-
+	return &accounts
 }

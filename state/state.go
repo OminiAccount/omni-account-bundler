@@ -30,10 +30,10 @@ type State struct {
 	logger log.Logger
 }
 
-func NewState(sc Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
-	ctx, cancel := context.WithCancel(sc.Context)
+func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
+	ctx, cancel := context.WithCancel(cfg.Context)
 	state := &State{
-		cfg:         sc,
+		cfg:         cfg,
 		ctx:         ctx,
 		cancel:      cancel,
 		pool:        pool,
@@ -41,14 +41,15 @@ func NewState(sc Config, pool PoolInterface, ethereum EthereumInterface) (*State
 		tree:        smt.NewZeroMerkleTree(50),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
-
-		storage: NewStorage(),
+		storage:     NewStorage(cfg.LevelDB),
 
 		logger: log.New("service", "state"),
 	}
 
+	state.LoadCache()
+
 	// mock
-	state.mockTree()
+	//state.mockTree()
 
 	return state, nil
 }
@@ -59,6 +60,7 @@ func (s *State) Start() {
 }
 
 func (s *State) Stop() {
+	s.Persistence()
 	s.cancel()
 }
 
@@ -186,7 +188,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 
 func (s *State) ExecuteBatch() {
 	s.logger.Info("ExecuteBatch start")
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
@@ -216,4 +218,35 @@ func (s *State) executeBatch() error {
 
 func (s *State) AddNewMapping(mapping types.AccountMapping) error {
 	return s.storage.Account.AddNewMapping(mapping)
+}
+
+func (s *State) GetAccountsForUser(user common.Address) *[]common.Address {
+	return s.storage.Account.GetAccountsForUser(user)
+}
+
+func (s *State) GetBalanceAndNonceForAccount(account common.Address, chainId uint64) (*big.Int, uint64) {
+	var balance big.Int
+	balanceKeyIndex := smt.ComputeBalanceIndex(account.Bytes())
+	balanceMerkleProof := s.tree.GetLeaf(balanceKeyIndex)
+	balance.SetString(string(balanceMerkleProof.Value), 16)
+
+	var nonce big.Int
+	nonceKeyIndex := smt.ComputeNonceIndex(account.Bytes(), chainId)
+	nonceMerkleProof := s.tree.GetLeaf(nonceKeyIndex)
+	nonce.SetString(string(nonceMerkleProof.Value), 16)
+	return &balance, nonce.Uint64()
+}
+
+func (s *State) Persistence() {
+	s.logger.Info("Storage persistence")
+	if err := s.storage.persistence(); err != nil {
+		s.logger.Error("Storage persistence error", "error", err)
+	}
+}
+
+func (s *State) LoadCache() {
+	s.logger.Info("Load persistence")
+	if err := s.storage.loadDisk(); err != nil {
+		s.logger.Error("Load persistence error", "error", err)
+	}
 }

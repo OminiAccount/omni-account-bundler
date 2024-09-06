@@ -29,7 +29,7 @@ func NewMemoryPool(cfg Config) *Pool {
 	}
 
 	// mock
-	pool.mockPool()
+	//pool.mockPool()
 
 	return pool
 }
@@ -55,8 +55,15 @@ func (p *Pool) AddTicket(ticket TicketFull) {
 }
 
 func (p *Pool) CheckFlush() {
-	if uint64(len(p.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
-		p.Flush()
+	// If the flushInterval is not 0, check both maxOps and time interval
+	if p.cfg.flushInterval != 0 {
+		if uint64(len(p.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
+			p.Flush()
+		}
+	} else {
+		if uint64(len(p.userOps)) >= p.cfg.maxOps {
+			p.Flush()
+		}
 	}
 }
 
