@@ -32,8 +32,6 @@ func (p *Pool) mockPool() {
 		Signature: common.FromHex("0xc5ffeb27a1232cd0f25d69294de67a975a08ca7a34d8ed1fb8769c64f423645e7e6a07e1ad4bd91f5b8b9512aa016bb40deca600de01db8aadda3401c03548aa1c"),
 	}
 
-	fmt.Println("op", mockOp.Signature)
-
 	p.AddUserOp(mockOp)
 
 	mockOp1 := SignedUserOperation{

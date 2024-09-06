@@ -29,11 +29,11 @@ func NewMemoryPool(cfg Config) *Pool {
 	}
 
 	// mock
-
-	go func() {
-		time.Sleep(10 * time.Second)
-		pool.mockPool()
-	}()
+	//
+	//go func() {
+	//	time.Sleep(10 * time.Second)
+	//	pool.mockPool()
+	//}()
 
 	return pool
 }
