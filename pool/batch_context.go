@@ -13,6 +13,17 @@ func (b *BatchContext) SignedUserOperations() []SignedUserOperation {
 	return b.userOps
 }
 
-func (b *BatchContext) Tickets() []TicketFull {
-	return b.tickets
+// SortedTickets Returns the sorted tickets, sorted in the order of depositTicket before withdrawTicket
+func (b *BatchContext) SortedTickets() []TicketFull {
+	var depositTickets, withdrawTickets []TicketFull
+
+	for _, ticket := range b.tickets {
+		if ticket.Type == Deposit {
+			depositTickets = append(depositTickets, ticket)
+		} else if ticket.Type == Withdraw {
+			withdrawTickets = append(withdrawTickets, ticket)
+		}
+	}
+
+	return append(depositTickets, withdrawTickets...)
 }

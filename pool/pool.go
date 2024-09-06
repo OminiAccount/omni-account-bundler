@@ -29,7 +29,11 @@ func NewMemoryPool(cfg Config) *Pool {
 	}
 
 	// mock
-	//pool.mockPool()
+
+	go func() {
+		time.Sleep(10 * time.Second)
+		pool.mockPool()
+	}()
 
 	return pool
 }
@@ -81,8 +85,8 @@ func (p *Pool) Flush() {
 	p.lastFlushTime = time.Now()
 
 	// Execute specific processing logic
-	fmt.Println("UserOps:", context.userOps)
-	fmt.Println("Tickets:", context.tickets)
+	fmt.Println("UserOps:", len(context.userOps))
+	fmt.Println("Tickets:", len(context.tickets))
 	p.context <- context
 }
 

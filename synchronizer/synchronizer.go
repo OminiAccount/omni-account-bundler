@@ -8,6 +8,7 @@ import (
 	"github.com/OAAC/utils/chains"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
+	"time"
 )
 
 type Synchronizer struct {
@@ -53,7 +54,7 @@ func (s *Synchronizer) sync() {
 }
 
 func (s *Synchronizer) syncTickets() {
-	s.logger.Info("components 1/2", "component", "tickets")
+	s.logger.Info("Components 1/2", "component", "tickets")
 	// start all chains tickets sync
 	var chans []<-chan pool.TicketFull
 
@@ -68,13 +69,13 @@ func (s *Synchronizer) syncTickets() {
 	}
 
 	// mock
-	//go func() {
-	//	ch := make(chan pool.TicketFull)
-	//	chans = append(chans, ch)
-	//	time.Sleep(3 * time.Second)
-	//	insertTicket(ch)
-	//}()
-	//time.Sleep(1 * time.Second)
+	go func() {
+		ch := make(chan pool.TicketFull)
+		chans = append(chans, ch)
+		time.Sleep(3 * time.Second)
+		insertTicket(ch)
+	}()
+	time.Sleep(1 * time.Second)
 
 	ticketChannel := mergeChannels(s.ctx, chans...)
 
@@ -95,7 +96,7 @@ func (s *Synchronizer) syncTickets() {
 }
 
 func (s *Synchronizer) syncAccountCreated() {
-	s.logger.Info("components 2/2", "component", "accountCreated")
+	s.logger.Info("Components 2/2", "component", "accountCreated")
 	ch := make(chan stateTypes.AccountMapping)
 
 	go func(ch chan stateTypes.AccountMapping) {

@@ -11,6 +11,7 @@ type UserAccount map[common.Address]map[common.Address]AccountInfo
 
 type AccountInfo struct {
 	Nonce uint64
+	//UserOperations []pool.UserOperation
 }
 
 type AccountMapping struct {
@@ -38,6 +39,10 @@ func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
 	}
 	return nil
 }
+
+//func (u *UserAccount) AddUserOperation(userOp *pool.UserOperation) error {
+//	(*u)[mapping.User]
+//}
 
 // GetAccountsForUser Iterate and print all account information for a given user
 func (u *UserAccount) GetAccountsForUser(user common.Address) *[]common.Address {

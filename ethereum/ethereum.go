@@ -8,11 +8,15 @@ import (
 	"github.com/OAAC/pool"
 	"github.com/OAAC/state/types"
 	"github.com/OAAC/utils/chains"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ethereumType "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"math/big"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -89,24 +93,62 @@ func (ether *Ethereum) WatchEntryPointEvent(ctx context.Context, chainId chains.
 	}
 	depositTicketAddedChannel := make(chan *EntryPoint.EntryPointDepositTicketAdded)
 	withdrawTicketAddedChannel := make(chan *EntryPoint.EntryPointWithdrawTicketAdded)
-	depositTicketSubscription, err := entryPoint.WatchDepositTicketAdded(opts, depositTicketAddedChannel, nil, nil)
-	if err != nil {
-		return err
-	}
-	defer depositTicketSubscription.Unsubscribe()
 
-	withdrawTicketSubscription, err := entryPoint.WatchWithdrawTicketAdded(opts, withdrawTicketAddedChannel, nil, nil)
+	// Encapsulating function to start a subscription
+	subscribe := func() (ethereum.Subscription, ethereum.Subscription, error) {
+		depositTicketSubscription, err := entryPoint.WatchDepositTicketAdded(opts, depositTicketAddedChannel, nil, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		withdrawTicketSubscription, err := entryPoint.WatchWithdrawTicketAdded(opts, withdrawTicketAddedChannel, nil, nil)
+		if err != nil {
+			depositTicketSubscription.Unsubscribe()
+			return nil, nil, err
+		}
+
+		return depositTicketSubscription, withdrawTicketSubscription, nil
+	}
+
+	// Initial Subscription
+	depositTicketSubscription, withdrawTicketSubscription, err := subscribe()
 	if err != nil {
 		return err
 	}
-	defer withdrawTicketSubscription.Unsubscribe()
+	defer func() {
+		depositTicketSubscription.Unsubscribe()
+		withdrawTicketSubscription.Unsubscribe()
+	}()
 
 	for {
 		select {
 		case err = <-depositTicketSubscription.Err():
-			ether.logger.Crit("Failed to subscribe to depositTicket", "error", err)
+			ether.logger.Error("Failed to subscribe to depositTicket", "error", err)
+
+			// Re-subscribe
+			depositTicketSubscription.Unsubscribe()
+			withdrawTicketSubscription.Unsubscribe()
+			for {
+				depositTicketSubscription, withdrawTicketSubscription, err = subscribe()
+				if err == nil {
+					break
+				}
+				ether.logger.Error("Retrying subscription after failure", "error", err)
+				time.Sleep(time.Second * 1)
+			}
 		case err = <-withdrawTicketSubscription.Err():
-			ether.logger.Crit("Failed to subscribe to withdrawTicket", "error", err)
+			ether.logger.Error("Failed to subscribe to withdrawTicket", "error", err)
+
+			depositTicketSubscription.Unsubscribe()
+			withdrawTicketSubscription.Unsubscribe()
+			for {
+				depositTicketSubscription, withdrawTicketSubscription, err = subscribe()
+				if err == nil {
+					break
+				}
+				ether.logger.Error("Retrying subscription after failure", "error", err)
+				time.Sleep(time.Second * 1)
+			}
 		case event1 := <-depositTicketAddedChannel:
 			ether.logger.Debug("Received deposit ticket event", "event", event1)
 			ticket := pool.TicketFull{
@@ -135,21 +177,26 @@ func (ether *Ethereum) WatchEntryPointEvent(ctx context.Context, chainId chains.
 	}
 }
 
-func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hexutil.Bytes) error {
-	_, err := ether.getAuthByAddress(ether.sender)
+func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hexutil.Bytes) (*ethereumType.Transaction, error) {
+	opts, err := ether.getAuthByAddress(ether.sender)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	// force nonce, gas limit and gas price to avoid querying it from the chain
+	opts.Nonce = big.NewInt(1)
+	opts.GasLimit = uint64(1)
+	opts.GasPrice = big.NewInt(1)
 
 	entryPoint := ether.ChainsClient[chains.ChainId(ether.chainId)].EntryPoint
 
-	//tx, err := entryPoint.ZkAAEntryPoint(&opts, proof, [32]byte(pubInput), opts.From)
-	//if err != nil {
-	//	return err
-	//}
+	tx, err := entryPoint.VerifyBatch(&opts, proof, pubicValues, opts.From)
+	if err != nil {
+		return nil, err
+	}
 
-	ether.logger.Info("update entryPoint root", "entryPoint", entryPoint)
-	return nil
+	ether.logger.Info("update entryPoint root", "hash", tx.Hash().String())
+	return tx, nil
 }
 
 func (ether *Ethereum) WatchAAFactoryEvent(ctx context.Context, fromBlock uint64, accountMappingChannel chan<- types.AccountMapping) error {

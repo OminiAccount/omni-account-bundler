@@ -94,6 +94,41 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	// Set old smt root
 	batch.SetOldSMTRoot(s.tree.GetRoot())
 
+	// Set tickets
+	var depositTickets, withdrawTickets []pool.Ticket
+
+	for _, ticketFull := range batchContext.SortedTickets() {
+		var balance big.Int
+		balanceKey := smt.ComputeBalanceKey(ticketFull.User.Bytes())
+		balanceKeyIndex := smt.KeyToIndex(balanceKey)
+		balanceMerkleProof := s.tree.GetLeaf(balanceKeyIndex)
+		balance.SetString(string(balanceMerkleProof.Value), 16)
+		fmt.Println("Ticket oldBalance", balance)
+
+		actionAmount := ticketFull.Amount.ToInt()
+		switch ticketFull.Type {
+		// balance + actionAmount
+		case pool.Deposit:
+			depositTickets = append(depositTickets, ticketFull.Ticket)
+			balance.Add(&balance, actionAmount)
+		// balance - actionAmount (if balance >= actionAmount)
+		case pool.Withdraw:
+			withdrawTickets = append(withdrawTickets, ticketFull.Ticket)
+			remainBalance := balance.Cmp(actionAmount)
+			if remainBalance < 0 {
+				return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
+			}
+			balance.Sub(&balance, actionAmount)
+		}
+		fmt.Println("Ticket newBalance", balance)
+
+		// Set newBalance
+		s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
+	}
+
+	batch.SetDepositTickets(depositTickets)
+	batch.SetWithdrawTickets(withdrawTickets)
+
 	// Set user operations
 	var userOperationProof []UserOperationProof
 
@@ -130,53 +165,23 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		newBalanceMerkleProof := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
 
 		newNonceMerkleProof := s.tree.SetLeaf(nonceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(nonce.Bytes(), 32))))
-
+		domainInfo := pool.EIP712Domain{
+			Name:              "OMNI-ACCOUNT",
+			Version:           "1.0",
+			ChainId:           11155111,
+			VerifyingContract: common.HexToAddress("0x5F2464f924b7D9166a870cCe9201AFBC2a2f151D"),
+		}
 		userOperationProof = append(userOperationProof, UserOperationProof{
 			UserOperation:     userOperation.UserOperation,
 			Signature:         userOperation.Signature,
 			EthRecoveryId:     userOperation.RecoverId(),
-			DomainInfo:        nil,
+			DomainInfo:        domainInfo,
 			BalanceDeltaProof: &newBalanceMerkleProof,
 			NonceDeltaProof:   &newNonceMerkleProof,
 		})
 	}
 
 	batch.SetUserOperationProofs(userOperationProof)
-
-	// Set tickets
-	var depositTickets, withdrawTickets []pool.Ticket
-
-	for _, ticketFull := range batchContext.Tickets() {
-		var balance big.Int
-		balanceKey := smt.ComputeBalanceKey(ticketFull.User.Bytes())
-		balanceKeyIndex := smt.KeyToIndex(balanceKey)
-		balanceMerkleProof := s.tree.GetLeaf(balanceKeyIndex)
-		balance.SetString(string(balanceMerkleProof.Value), 16)
-		fmt.Println("Ticket oldBalance", balance)
-
-		actionAmount := ticketFull.Amount.ToInt()
-		switch ticketFull.Type {
-		// balance + actionAmount
-		case pool.Deposit:
-			depositTickets = append(depositTickets, ticketFull.Ticket)
-			balance.Add(&balance, actionAmount)
-		// balance - actionAmount (if balance >= actionAmount)
-		case pool.Withdraw:
-			withdrawTickets = append(withdrawTickets, ticketFull.Ticket)
-			remainBalance := balance.Cmp(actionAmount)
-			if remainBalance < 0 {
-				return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
-			}
-			balance.Sub(&balance, actionAmount)
-		}
-		fmt.Println("Ticket newBalance", balance)
-
-		// Set newBalance
-		s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
-	}
-
-	batch.SetDepositTickets(depositTickets)
-	batch.SetWithdrawTickets(withdrawTickets)
 
 	// mock
 	number++
@@ -205,7 +210,7 @@ func (s *State) executeBatch() error {
 	if !s.provenQueue.IsEmpty() {
 		s.logger.Info("Executing batch")
 		res, _ := s.provenQueue.Dequeue()
-		err := s.ethereum.UpdateEntryPointRoot(res.Proof, res.PublicValues)
+		_, err := s.ethereum.UpdateEntryPointRoot(res.Proof, res.PublicValues)
 		if err != nil {
 			return err
 		}

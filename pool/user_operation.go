@@ -2,6 +2,7 @@ package pool
 
 import (
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +13,14 @@ import (
 	"golang.org/x/crypto/sha3"
 	"math/big"
 )
+
+// EIP712Domain represents the domain object for EIP-712
+type EIP712Domain struct {
+	Name              string
+	Version           string
+	ChainId           uint64
+	VerifyingContract common.Address
+}
 
 type UserOperation struct {
 	Sender               common.Address `json:"sender"`
@@ -32,16 +41,49 @@ type SignedUserOperation struct {
 	Signature hexutil.Bytes `json:"signature"`
 }
 
-type Domain struct {
-	Name              string
-	Version           string
-	ChainId           uint64
-	VerifyingContract common.Address
+// Hash for the EIP712 Domain
+func (domain EIP712Domain) hashEIP712Domain() common.Hash {
+	return crypto.Keccak256Hash(
+		crypto.Keccak256([]byte("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")),
+		crypto.Keccak256([]byte(domain.Name)),
+		crypto.Keccak256([]byte(domain.Version)),
+		big.NewInt(int64(domain.ChainId)).Bytes(),
+		domain.VerifyingContract.Bytes(),
+	)
+}
+
+// Hash the UserOperation
+//func (userOp UserOperation) hashUserOperation() common.Hash {
+//	return crypto.Keccak256Hash(
+//		crypto.Keccak256([]byte("UserOperation(address sender,uint256 nonce,uint64 chainId,bytes initCode,bytes callData,uint256 callGasLimit,uint256 verificationGasLimit,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,bytes paymasterAndData)")),
+//		userOp.Bytes(),
+//	)
+//}
+//
+//func (userOp UserOperation) Bytes() []byte {
+//	return bytes.Join([][]byte{
+//		userOp.Sender.Bytes(),
+//		U64ToBytes(userOp.Nonce),
+//		userOp.ChainId.ToInt().Bytes(),
+//		crypto.Keccak256(userOp.InitCode),
+//		crypto.Keccak256(userOp.CallData),
+//		U64ToBytes(userOp.CallGasLimit),
+//		U64ToBytes(userOp.VerificationGasLimit),
+//		userOp.PreVerificationGas.ToInt().Bytes(),
+//		userOp.MaxFeePerGas.ToInt().Bytes(),
+//		userOp.MaxPriorityFeePerGas.ToInt().Bytes(),
+//		crypto.Keccak256(userOp.PaymasterAndData),
+//	}, nil)
+//}
+
+func U64ToBytes(u64 hexutil.Uint64) []byte {
+	bytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(bytes, uint64(u64))
+	return bytes
 }
 
 func (su *SignedUserOperation) RecoverId() uint8 {
-	v := su.Signature[64] + 27
-	fmt.Printf("v: %d\n", v)
+	v := su.Signature[64]
 	return v
 }
 
@@ -64,7 +106,7 @@ func MockSignedUserOperation(address string, privateKeyHex string, chainID uint6
 	domainSeparator := sha3.NewLegacyKeccak256()
 	domainSeparator.Write([]byte{0x19, 0x01})
 
-	domain := Domain{
+	domain := EIP712Domain{
 		Name:              "ZK-AA",
 		Version:           "1.0",
 		ChainId:           chainID,
