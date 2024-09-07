@@ -9,6 +9,7 @@ import (
 type (
 	PoolInterface interface {
 		Context() chan pool.BatchContext
+		Cache()
 	}
 
 	EthereumInterface interface {

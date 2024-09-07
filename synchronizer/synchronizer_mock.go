@@ -11,11 +11,13 @@ func createAndSendTicket(ticketChannel chan<- pool.TicketFull, userAddress strin
 	bigInt := new(big.Int)
 	bigInt, _ = bigInt.SetString(amountHex[2:], 16)
 
+	timestampBigInt := new(big.Int).SetUint64(timestamp)
+
 	ticket := pool.TicketFull{
 		Ticket: pool.Ticket{
 			User:      common.HexToAddress(userAddress),
 			Amount:    (*hexutil.Big)(bigInt),
-			TimeStamp: timestamp,
+			TimeStamp: (*hexutil.Big)(timestampBigInt),
 		},
 		Type: ticketType,
 	}

@@ -155,7 +155,7 @@ func (ether *Ethereum) WatchEntryPointEvent(ctx context.Context, chainId chains.
 				Ticket: pool.Ticket{
 					User:      event1.User,
 					Amount:    (*hexutil.Big)(event1.Amount),
-					TimeStamp: event1.Timestamp.Uint64(),
+					TimeStamp: (*hexutil.Big)(event1.Timestamp),
 				},
 				Type: pool.Deposit,
 			}
@@ -166,7 +166,7 @@ func (ether *Ethereum) WatchEntryPointEvent(ctx context.Context, chainId chains.
 				Ticket: pool.Ticket{
 					User:      event2.User,
 					Amount:    (*hexutil.Big)(event2.Amount),
-					TimeStamp: event2.Timestamp.Uint64(),
+					TimeStamp: (*hexutil.Big)(event2.Timestamp),
 				},
 				Type: pool.Withdraw,
 			}

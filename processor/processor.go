@@ -42,7 +42,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	}
 
 	// pool
-	poolInstance := createPool(cfg.Pool)
+	poolInstance := pool.NewMemoryPool(cfg.Pool, levelDB)
 	log.Info("Pool successfully initialized")
 
 	// Ethereum

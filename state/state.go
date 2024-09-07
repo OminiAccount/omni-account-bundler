@@ -61,6 +61,7 @@ func (s *State) Start() {
 
 func (s *State) Stop() {
 	s.Persistence()
+	s.pool.Cache()
 	s.cancel()
 }
 
@@ -95,7 +96,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	batch.SetOldSMTRoot(s.tree.GetRoot())
 
 	// Set tickets
-	var depositTickets, withdrawTickets []pool.Ticket
+	var depositTickets, withdrawTickets []TicketProof
 
 	for _, ticketFull := range batchContext.SortedTickets() {
 		var balance big.Int
@@ -106,24 +107,42 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		fmt.Println("Ticket oldBalance", balance)
 
 		actionAmount := ticketFull.Amount.ToInt()
-		switch ticketFull.Type {
-		// balance + actionAmount
-		case pool.Deposit:
-			depositTickets = append(depositTickets, ticketFull.Ticket)
-			balance.Add(&balance, actionAmount)
-		// balance - actionAmount (if balance >= actionAmount)
-		case pool.Withdraw:
-			withdrawTickets = append(withdrawTickets, ticketFull.Ticket)
-			remainBalance := balance.Cmp(actionAmount)
-			if remainBalance < 0 {
-				return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
+
+		operation := func() error {
+			switch ticketFull.Type {
+			case pool.Deposit:
+				balance.Add(&balance, actionAmount)
+			case pool.Withdraw:
+				if balance.Cmp(actionAmount) < 0 {
+					return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
+				}
+				balance.Sub(&balance, actionAmount)
+			default:
+				return fmt.Errorf("unsupported ticket type: %v", ticketFull.Type)
 			}
-			balance.Sub(&balance, actionAmount)
+			return nil
 		}
-		fmt.Println("Ticket newBalance", balance)
+
+		if err := operation(); err != nil {
+			return err
+		}
 
 		// Set newBalance
-		s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
+		delta := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
+
+		ticketProof := TicketProof{
+			Ticket:      &ticketFull.Ticket,
+			TicketProof: &delta,
+		}
+
+		switch ticketFull.Type {
+		case pool.Deposit:
+			depositTickets = append(depositTickets, ticketProof)
+		case pool.Withdraw:
+			withdrawTickets = append(withdrawTickets, ticketProof)
+		}
+
+		fmt.Println("Ticket newBalance", balance)
 	}
 
 	batch.SetDepositTickets(depositTickets)

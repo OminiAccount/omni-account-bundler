@@ -15,7 +15,7 @@ const (
 type Ticket struct {
 	User      common.Address `json:"user"`
 	Amount    *hexutil.Big   `json:"amount"`
-	TimeStamp uint64         `json:"timestamp"`
+	TimeStamp *hexutil.Big   `json:"timestamp"`
 }
 
 type TicketFull struct {

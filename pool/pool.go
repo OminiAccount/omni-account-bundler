@@ -2,6 +2,7 @@ package pool
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
 	"time"
@@ -9,31 +10,34 @@ import (
 
 type Pool struct {
 	mu            sync.Mutex
-	userOps       []SignedUserOperation
-	tickets       []TicketFull
 	cfg           Config
 	lastFlushTime time.Time
 	context       chan BatchContext
+	stopChan      chan struct{}
+
+	storage *Storage
 
 	logger log.Logger
 }
 
-func NewMemoryPool(cfg Config) *Pool {
+func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 	pool := &Pool{
-		userOps:       []SignedUserOperation{},
-		tickets:       []TicketFull{},
 		cfg:           cfg,
 		lastFlushTime: time.Now(),
 		context:       make(chan BatchContext, 100),
+		storage:       NewStorage(db),
 		logger:        log.New("service", "pool"),
 	}
 
+	pool.LoadCache()
+
 	// mock
-	//
-	//go func() {
-	//	time.Sleep(10 * time.Second)
-	//	pool.mockPool()
-	//}()
+	go func() {
+		time.Sleep(10 * time.Second)
+		pool.mockPool()
+	}()
+
+	go pool.StartAutoFlush()
 
 	return pool
 }
@@ -44,7 +48,7 @@ func (p *Pool) AddUserOp(op SignedUserOperation) {
 
 	p.logger.Info("Add a new userOp", "userOp", op)
 
-	p.userOps = append(p.userOps, op)
+	p.storage.addUserOp(op)
 	p.CheckFlush()
 }
 
@@ -54,18 +58,18 @@ func (p *Pool) AddTicket(ticket TicketFull) {
 
 	p.logger.Info("Add a new ticket", "ticket", ticket)
 
-	p.tickets = append(p.tickets, ticket)
+	p.storage.addTicket(ticket)
 	p.CheckFlush()
 }
 
 func (p *Pool) CheckFlush() {
 	// If the flushInterval is not 0, check both maxOps and time interval
 	if p.cfg.flushInterval != 0 {
-		if uint64(len(p.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
+		if uint64(len(p.storage.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
 			p.Flush()
 		}
 	} else {
-		if uint64(len(p.userOps)) >= p.cfg.maxOps {
+		if uint64(len(p.storage.userOps)) >= p.cfg.maxOps {
 			p.Flush()
 		}
 	}
@@ -75,13 +79,12 @@ func (p *Pool) Flush() {
 	fmt.Println("Flushing memory pool...")
 
 	context := BatchContext{
-		userOps: p.userOps,
-		tickets: p.tickets,
+		userOps: p.storage.getUserOps(),
+		tickets: p.storage.getTickets(),
 	}
 
 	// Empty the memory pool
-	p.userOps = []SignedUserOperation{}
-	p.tickets = []TicketFull{}
+	p.storage.empty()
 	p.lastFlushTime = time.Now()
 
 	// Execute specific processing logic
@@ -90,6 +93,42 @@ func (p *Pool) Flush() {
 	p.context <- context
 }
 
+func (p *Pool) StartAutoFlush() {
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			p.CheckFlush()
+		case <-p.stopChan:
+			ticker.Stop()
+			return
+		}
+	}
+}
+
+func (p *Pool) StopAutoFlush() {
+	close(p.stopChan)
+}
+
 func (p *Pool) Context() chan BatchContext {
 	return p.context
+}
+
+func (p *Pool) Cache() {
+	if err := p.storage.cacheTickets(); err != nil {
+		p.logger.Error("pool cache tickets error", "error", err)
+	}
+	if err := p.storage.cacheUserOps(); err != nil {
+		p.logger.Error("pool cache userOps error", "error", err)
+	}
+}
+
+func (p *Pool) LoadCache() {
+	p.logger.Info("Load cache")
+	if err := p.storage.loadTickets(); err != nil {
+		p.logger.Error("pool load cache tickets error", "error", err)
+	}
+	if err := p.storage.loadUserOps(); err != nil {
+		p.logger.Error("pool load cache userOps error", "error", err)
+	}
 }

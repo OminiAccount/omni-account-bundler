@@ -16,14 +16,18 @@ type UserOperationProof struct {
 	NonceDeltaProof   *smt.DeltaMerkleProof `json:"nonce_delta_proof"`
 }
 
+type TicketProof struct {
+	Ticket      *pool.Ticket          `json:"ticket"`
+	TicketProof *smt.DeltaMerkleProof `json:"delta_proof"`
+}
+
 type Batch struct {
 	Number              uint64 `json:"number"`
 	timestamp           uint64
 	UserOperationProofs *[]UserOperationProof `json:"userop_inputs"`
-	DepositTickets      *[]pool.Ticket        `json:"d_tickets_inputs"`
-	WithdrawTickets     *[]pool.Ticket        `json:"w_tickets_inputs"`
+	DepositTickets      *[]TicketProof        `json:"d_tickets_inputs"`
+	WithdrawTickets     *[]TicketProof        `json:"w_tickets_inputs"`
 	OldSMTRoot          common.Hash           `json:"old_smt_root"`
-	//stateRoot common.Hash
 }
 
 func NewBatch(number uint64) (*Batch, error) {
@@ -38,11 +42,11 @@ func (b *Batch) SetUserOperationProofs(value []UserOperationProof) {
 	b.UserOperationProofs = &value
 }
 
-func (b *Batch) SetDepositTickets(value []pool.Ticket) {
+func (b *Batch) SetDepositTickets(value []TicketProof) {
 	b.DepositTickets = &value
 }
 
-func (b *Batch) SetWithdrawTickets(value []pool.Ticket) {
+func (b *Batch) SetWithdrawTickets(value []TicketProof) {
 	b.WithdrawTickets = &value
 }
 

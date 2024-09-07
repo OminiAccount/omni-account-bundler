@@ -7,10 +7,6 @@ import (
 	"github.com/OAAC/state"
 )
 
-func createPool(cfg pool.Config) *pool.Pool {
-	return pool.NewMemoryPool(cfg)
-}
-
 func createJSONRPCServer(cfg rpcs.RpcsConfig, pool *pool.Pool, state *state.State) *jsonrpc.Server {
 	s := jsonrpc.Service{
 		Name:    jsonrpc.APIEth,
