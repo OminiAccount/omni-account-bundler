@@ -54,3 +54,7 @@ func (e *EthEndpoints) GetAccountInfo(account common.Address, chainId uint64) in
 		Nonce:   nonce,
 	}
 }
+
+func (e *EthEndpoints) GetUserOpsForAccount(user, account common.Address) (interface{}, error) {
+	return e.state.GetUserOpsForAccount(user, account)
+}

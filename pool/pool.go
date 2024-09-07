@@ -32,12 +32,12 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 	pool.LoadCache()
 
 	// mock
-	go func() {
-		time.Sleep(10 * time.Second)
-		pool.mockPool()
-	}()
+	//go func() {
+	//	time.Sleep(10 * time.Second)
+	//	pool.mockPool()
+	//}()
 
-	go pool.StartAutoFlush()
+	//go pool.StartAutoFlush()
 
 	return pool
 }
@@ -46,7 +46,7 @@ func (p *Pool) AddUserOp(op SignedUserOperation) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.logger.Info("Add a new userOp", "userOp", op)
+	p.logger.Info("Add a new userOp", "nonce", op.Nonce)
 
 	p.storage.addUserOp(op)
 	p.CheckFlush()

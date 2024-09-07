@@ -184,16 +184,19 @@ func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hex
 	}
 
 	// force nonce, gas limit and gas price to avoid querying it from the chain
-	opts.Nonce = big.NewInt(1)
-	opts.GasLimit = uint64(1)
-	opts.GasPrice = big.NewInt(1)
+	//opts.Nonce = big.NewInt(1)
+	//opts.GasLimit = uint64(47860)
+	//opts.GasPrice = big.NewInt(1)
+	opts.Value = big.NewInt(146839574447005)
 
 	entryPoint := ether.ChainsClient[chains.ChainId(ether.chainId)].EntryPoint
 
 	tx, err := entryPoint.VerifyBatch(&opts, proof, pubicValues, opts.From)
+
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("tx", tx.Hash())
 
 	ether.logger.Info("update entryPoint root", "hash", tx.Hash().String())
 	return tx, nil

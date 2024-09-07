@@ -38,7 +38,7 @@ func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*Stat
 		cancel:      cancel,
 		pool:        pool,
 		ethereum:    ethereum,
-		tree:        smt.NewZeroMerkleTree(50),
+		tree:        smt.NewZeroMerkleTree(256),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
 		storage:     NewStorage(cfg.LevelDB),
@@ -47,9 +47,6 @@ func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*Stat
 	}
 
 	state.LoadCache()
-
-	// mock
-	//state.mockTree()
 
 	return state, nil
 }
@@ -99,6 +96,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	var depositTickets, withdrawTickets []TicketProof
 
 	for _, ticketFull := range batchContext.SortedTickets() {
+		fmt.Println("old root", s.tree.GetRoot())
 		var balance big.Int
 		balanceKey := smt.ComputeBalanceKey(ticketFull.User.Bytes())
 		balanceKeyIndex := smt.KeyToIndex(balanceKey)
@@ -129,7 +127,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 
 		// Set newBalance
 		delta := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
-
+		fmt.Println("new root", s.tree.GetRoot())
 		ticketProof := TicketProof{
 			Ticket:      &ticketFull.Ticket,
 			TicketProof: &delta,
@@ -152,6 +150,8 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	var userOperationProof []UserOperationProof
 
 	for _, userOperation := range batchContext.SignedUserOperations() {
+		fmt.Println("Nonce========", userOperation.Nonce)
+		fmt.Println("old root", s.tree.GetRoot())
 		// balance
 		var balance big.Int
 		balanceKey := smt.ComputeBalanceKey(userOperation.Sender.Bytes())
@@ -184,6 +184,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		newBalanceMerkleProof := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
 
 		newNonceMerkleProof := s.tree.SetLeaf(nonceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(nonce.Bytes(), 32))))
+		fmt.Println("new root", s.tree.GetRoot())
 		domainInfo := pool.EIP712Domain{
 			Name:              "OMNI-ACCOUNT",
 			Version:           "1.0",
@@ -192,12 +193,16 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		}
 		userOperationProof = append(userOperationProof, UserOperationProof{
 			UserOperation:     userOperation.UserOperation,
-			Signature:         userOperation.Signature,
+			Signature:         userOperation.Signature[0:64],
 			EthRecoveryId:     userOperation.RecoverId(),
 			DomainInfo:        domainInfo,
 			BalanceDeltaProof: &newBalanceMerkleProof,
 			NonceDeltaProof:   &newNonceMerkleProof,
 		})
+		err = s.storage.Account.AddUserOperation(*userOperation.UserOperation)
+		if err != nil {
+			return err
+		}
 	}
 
 	batch.SetUserOperationProofs(userOperationProof)
@@ -212,11 +217,14 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 
 func (s *State) ExecuteBatch() {
 	s.logger.Info("ExecuteBatch start")
-	ticker := time.NewTicker(60 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-ticker.C:
-			s.executeBatch()
+			err := s.executeBatch()
+			if err != nil {
+				s.logger.Warn("send batch to verify error", "error", err)
+			}
 		case <-s.ctx.Done():
 			s.logger.Warn("Stopping ExecuteBatch due to context cancellation")
 			return
@@ -248,6 +256,10 @@ func (s *State) GetAccountsForUser(user common.Address) *[]common.Address {
 	return s.storage.Account.GetAccountsForUser(user)
 }
 
+func (s *State) GetUserOpsForAccount(user, account common.Address) (*[]pool.UserOperation, error) {
+	return s.storage.Account.GetUserOpsForAccount(user, account)
+}
+
 func (s *State) GetBalanceAndNonceForAccount(account common.Address, chainId uint64) (*big.Int, uint64) {
 	var balance big.Int
 	balanceKeyIndex := smt.ComputeBalanceIndex(account.Bytes())
@@ -262,15 +274,26 @@ func (s *State) GetBalanceAndNonceForAccount(account common.Address, chainId uin
 }
 
 func (s *State) Persistence() {
-	s.logger.Info("Storage persistence")
-	if err := s.storage.persistence(); err != nil {
-		s.logger.Error("Storage persistence error", "error", err)
+	s.logger.Info("cache UserAccount info into disk")
+	if err := s.storage.cache(); err != nil {
+		s.logger.Error("Cache UserAccount info into disk error", "error", err)
+	}
+	if err := s.storage.cacheSmt(s.tree); err != nil {
+		s.logger.Error("Cache Smt into disk error", "error", err)
 	}
 }
 
 func (s *State) LoadCache() {
-	s.logger.Info("Load persistence")
-	if err := s.storage.loadDisk(); err != nil {
-		s.logger.Error("Load persistence error", "error", err)
+	s.logger.Info("Load UserAccount info from disk")
+	if err := s.storage.loadCache(); err != nil {
+		s.logger.Error("Load UserAccount info from disk error", "error", err)
 	}
+	tree, err := s.storage.loadCacheSmt()
+	if err != nil {
+		s.logger.Error("Load Smt info from disk error", "error", err)
+	}
+	if tree != nil {
+		s.tree = tree
+	}
+
 }

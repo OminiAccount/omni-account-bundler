@@ -16,4 +16,5 @@ type StateInterface interface {
 	SetBatchProofResult(result *state.ProofResult) error
 	GetAccountsForUser(user common.Address) *[]common.Address
 	GetBalanceAndNonceForAccount(account common.Address, chainId uint64) (*big.Int, uint64)
+	GetUserOpsForAccount(user, account common.Address) (*[]pool.UserOperation, error)
 }

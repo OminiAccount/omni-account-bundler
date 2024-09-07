@@ -1,7 +1,6 @@
 package pool
 
 import (
-	"fmt"
 	msgpack2 "github.com/OAAC/utils/msgpack"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -78,7 +77,6 @@ func (s *Storage) loadTickets() error {
 			return err
 		}
 		s.tickets = decodeTicket
-		fmt.Println("s.tickets", len(s.tickets))
 	}
 	return nil
 }

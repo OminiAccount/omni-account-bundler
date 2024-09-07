@@ -41,40 +41,36 @@ type SignedUserOperation struct {
 	Signature hexutil.Bytes `json:"signature"`
 }
 
-// Hash for the EIP712 Domain
-func (domain EIP712Domain) hashEIP712Domain() common.Hash {
-	return crypto.Keccak256Hash(
-		crypto.Keccak256([]byte("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")),
-		crypto.Keccak256([]byte(domain.Name)),
-		crypto.Keccak256([]byte(domain.Version)),
-		big.NewInt(int64(domain.ChainId)).Bytes(),
-		domain.VerifyingContract.Bytes(),
-	)
-}
+// Recover the address from the signature
+func recoverAddressFromSignature(signature []byte, messageHash common.Hash) (common.Address, error) {
+	if len(signature) != 65 {
+		return common.Address{}, fmt.Errorf("invalid signature length: expected 65 bytes, got %d", len(signature))
+	}
 
-// Hash the UserOperation
-//func (userOp UserOperation) hashUserOperation() common.Hash {
-//	return crypto.Keccak256Hash(
-//		crypto.Keccak256([]byte("UserOperation(address sender,uint256 nonce,uint64 chainId,bytes initCode,bytes callData,uint256 callGasLimit,uint256 verificationGasLimit,uint256 preVerificationGas,uint256 maxFeePerGas,uint256 maxPriorityFeePerGas,bytes paymasterAndData)")),
-//		userOp.Bytes(),
-//	)
-//}
-//
-//func (userOp UserOperation) Bytes() []byte {
-//	return bytes.Join([][]byte{
-//		userOp.Sender.Bytes(),
-//		U64ToBytes(userOp.Nonce),
-//		userOp.ChainId.ToInt().Bytes(),
-//		crypto.Keccak256(userOp.InitCode),
-//		crypto.Keccak256(userOp.CallData),
-//		U64ToBytes(userOp.CallGasLimit),
-//		U64ToBytes(userOp.VerificationGasLimit),
-//		userOp.PreVerificationGas.ToInt().Bytes(),
-//		userOp.MaxFeePerGas.ToInt().Bytes(),
-//		userOp.MaxPriorityFeePerGas.ToInt().Bytes(),
-//		crypto.Keccak256(userOp.PaymasterAndData),
-//	}, nil)
-//}
+	r := signature[:32]
+	s := signature[32:64]
+	v := signature[64]
+
+	// Adjust v value for EIP-155 compliance
+	if v < 27 {
+		v += 27
+	}
+
+	// Recover the public key from the signature
+	pubKey, err := crypto.Ecrecover(messageHash.Bytes(), append(r, append(s, v)...))
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	// Get the address from the recovered public key
+	pubKeyECDSA, err := crypto.UnmarshalPubkey(pubKey)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*pubKeyECDSA)
+	return recoveredAddr, nil
+}
 
 func U64ToBytes(u64 hexutil.Uint64) []byte {
 	bytes := make([]byte, 8)

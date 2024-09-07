@@ -8,7 +8,6 @@ import (
 	"github.com/OAAC/utils/chains"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
-	"time"
 )
 
 type Synchronizer struct {
@@ -69,13 +68,13 @@ func (s *Synchronizer) syncTickets() {
 	}
 
 	// mock
-	go func() {
-		ch := make(chan pool.TicketFull)
-		chans = append(chans, ch)
-		time.Sleep(3 * time.Second)
-		insertTicket(ch)
-	}()
-	time.Sleep(1 * time.Second)
+	//go func() {
+	//	ch := make(chan pool.TicketFull)
+	//	chans = append(chans, ch)
+	//	time.Sleep(3 * time.Second)
+	//	insertTicket(ch)
+	//}()
+	//time.Sleep(1 * time.Second)
 
 	ticketChannel := mergeChannels(s.ctx, chans...)
 
@@ -113,6 +112,11 @@ func (s *Synchronizer) syncAccountCreated() {
 	//		Account: common.HexToAddress("fd63ed0566a782ef57f559c6f5f9afece4866423"),
 	//	}
 	//	ch <- mappingInsert
+	//	mappingInsert1 := stateTypes.AccountMapping{
+	//		User:    common.HexToAddress("27916984c665f15041929B68451303136FA16653"),
+	//		Account: common.HexToAddress("93d53D2d8f0d623C5cbE46daa818177a450bd9f7"),
+	//	}
+	//	ch <- mappingInsert1
 	//}()
 
 	for {
