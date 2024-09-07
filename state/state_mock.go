@@ -13,14 +13,14 @@ func (s *State) mockTree() {
 
 	// init 1 ETH balance for mock user
 	s.tree.SetLeaf(
-		int(smt.KeyToIndex(balanceKey)),
+		smt.KeyToIndex(balanceKey),
 		"0000000000000000000000000000000000000000000000000de0b6b3a7640000",
 	)
 	chain_id := 42161
 	nonceKey := smt.ComputeNonceKey(common.HexToAddress(sender).Bytes(), uint64(chain_id))
 
 	s.tree.SetLeaf(
-		int(smt.KeyToIndex(nonceKey)),
+		smt.KeyToIndex(nonceKey),
 		"0000000000000000000000000000000000000000000000000000000000000007",
 	)
 }

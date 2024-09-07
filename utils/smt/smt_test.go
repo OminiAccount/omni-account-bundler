@@ -3,6 +3,7 @@ package smt
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"testing"
 )
 
@@ -26,17 +27,17 @@ func TestSMT(t *testing.T) {
 	}
 	tree := NewZeroMerkleTree(3)
 	for i, leaf := range leavesToSet {
-		deltaProof := tree.SetLeaf(i, leaf)
+		deltaProof := tree.SetLeaf(big.NewInt(int64(i)), leaf)
 		proofJson, _ := json.MarshalIndent(deltaProof, "", "  ")
 		fmt.Printf("Example 2: Setting leaf %d gives delta proof: %s\n", i, string(proofJson))
 	}
 
 	// Example 3: Verify a Merkle proof
-	leaf := tree.GetLeaf(3)
+	leaf := tree.GetLeaf(big.NewInt(3))
 	isValid := VerifyMerkleProof(leaf)
 	fmt.Println("Example 3: The proof is valid:", isValid)
 
 	// Example 4: Verify a Delta Merkle proof
-	isValidDelta := VerifyDeltaMerkleProof(tree.SetLeaf(2, "0000000000000000000000000000000000000000000000000000000000000012"))
+	isValidDelta := VerifyDeltaMerkleProof(tree.SetLeaf(big.NewInt(2), "0000000000000000000000000000000000000000000000000000000000000012"))
 	fmt.Println("Example 4: The delta proof is valid:", isValidDelta)
 }

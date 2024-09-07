@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
+	"math/big"
 )
 
 type LeafValue interface {
@@ -65,11 +66,13 @@ func toBytes(val uint64) []byte {
 	return bytes
 }
 
-func KeyToIndex(key string) int {
-	truncatedStr := key[len(key)-8:]
+func KeyToIndex(key string) *big.Int {
+	truncatedStr := key[len(key)-64:]
 	index, err := hex.DecodeString(truncatedStr)
 	if err != nil {
 		panic("Invalid hex string")
 	}
-	return int(int64(index[0])<<24 + int64(index[1])<<16 + int64(index[2])<<8 + int64(index[3]))
+	bigIndex := new(big.Int).SetBytes(index)
+
+	return bigIndex
 }

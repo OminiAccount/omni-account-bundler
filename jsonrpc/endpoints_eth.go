@@ -30,6 +30,7 @@ func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) 
 }
 
 func (e *EthEndpoints) GetBatchProof() (interface{}, error) {
+	fmt.Println("getBatchProof")
 	return e.state.GetBatchProof()
 }
 

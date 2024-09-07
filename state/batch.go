@@ -25,8 +25,8 @@ type Batch struct {
 	Number              uint64 `json:"number"`
 	timestamp           uint64
 	UserOperationProofs *[]UserOperationProof `json:"userop_inputs"`
-	DepositTickets      *[]TicketProof        `json:"d_tickets_inputs"`
-	WithdrawTickets     *[]TicketProof        `json:"w_tickets_inputs"`
+	DepositTickets      *[]TicketProof        `json:"d_ticket_inputs"`
+	WithdrawTickets     *[]TicketProof        `json:"w_ticket_inputs"`
 	OldSMTRoot          common.Hash           `json:"old_smt_root"`
 }
 

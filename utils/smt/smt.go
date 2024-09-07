@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 // MerkleNodeValue represents the value of each node in the Merkle tree
@@ -14,13 +15,13 @@ type MerkleNodeValue string
 type MerkleProof struct {
 	Root     MerkleNodeValue   `json:"root"`
 	Siblings []MerkleNodeValue `json:"siblings"`
-	Index    int               `json:"index"`
+	Index    *big.Int          `json:"index"`
 	Value    MerkleNodeValue   `json:"value"`
 }
 
 // DeltaMerkleProof represents a proof of the state transition in the Merkle tree
 type DeltaMerkleProof struct {
-	Index    int               `json:"index"`
+	Index    *big.Int          `json:"index"`
 	Siblings []MerkleNodeValue `json:"siblings"`
 	OldRoot  MerkleNodeValue   `json:"old_root"`
 	OldValue MerkleNodeValue   `json:"old_value"`
@@ -68,22 +69,22 @@ func NewNodeStore(height int) *NodeStore {
 }
 
 // Contains checks if a node exists in the store
-func (ns *NodeStore) Contains(level, index int) bool {
-	key := fmt.Sprintf("%d_%d", level, index)
+func (ns *NodeStore) Contains(level int, index *big.Int) bool {
+	key := fmt.Sprintf("%d_%s", level, index.Text(10))
 	_, exists := ns.Nodes[key]
 	return exists
 }
 
 // Set sets a node value in the store
-func (ns *NodeStore) Set(level, index int, value MerkleNodeValue) {
-	key := fmt.Sprintf("%d_%d", level, index)
+func (ns *NodeStore) Set(level int, index *big.Int, value MerkleNodeValue) {
+	key := fmt.Sprintf("%d_%s", level, index.Text(10))
 	ns.Nodes[key] = value
 }
 
 // Get retrieves a node value from the store
-func (ns *NodeStore) Get(level, index int) MerkleNodeValue {
+func (ns *NodeStore) Get(level int, index *big.Int) MerkleNodeValue {
 	if ns.Contains(level, index) {
-		key := fmt.Sprintf("%d_%d", level, index)
+		key := fmt.Sprintf("%d_%s", level, index.Text(10))
 		return ns.Nodes[key]
 	}
 	return ns.ZeroHashes[ns.Height-level]
@@ -104,31 +105,31 @@ func NewZeroMerkleTree(height int) *ZeroMerkleTree {
 }
 
 // SetLeaf sets a leaf value in the Merkle tree
-func (zmt *ZeroMerkleTree) SetLeaf(index int, value MerkleNodeValue) DeltaMerkleProof {
-	oldRoot := zmt.NodeStore.Get(0, 0)
+func (zmt *ZeroMerkleTree) SetLeaf(index *big.Int, value MerkleNodeValue) DeltaMerkleProof {
+	oldRoot := zmt.NodeStore.Get(0, big.NewInt(0))
 	oldValue := zmt.NodeStore.Get(zmt.Height, index)
 
 	var siblings []MerkleNodeValue
-	currentIndex := index
+	currentIndex := new(big.Int).Set(index)
 	currentValue := value
 
 	for level := zmt.Height; level >= 1; level-- {
 		zmt.NodeStore.Set(level, currentIndex, currentValue)
 
-		if currentIndex%2 == 0 {
-			rightSibling := zmt.NodeStore.Get(level, currentIndex+1)
+		if currentIndex.Bit(0) == 0 {
+			rightSibling := zmt.NodeStore.Get(level, new(big.Int).Add(currentIndex, big.NewInt(1)))
 			currentValue = hash(currentValue, rightSibling)
 			siblings = append(siblings, rightSibling)
 		} else {
-			leftSibling := zmt.NodeStore.Get(level, currentIndex-1)
+			leftSibling := zmt.NodeStore.Get(level, new(big.Int).Sub(currentIndex, big.NewInt(1)))
 			currentValue = hash(leftSibling, currentValue)
 			siblings = append(siblings, leftSibling)
 		}
 
-		currentIndex /= 2
+		currentIndex.Rsh(currentIndex, 1)
 	}
 
-	zmt.NodeStore.Set(0, 0, currentValue)
+	zmt.NodeStore.Set(0, big.NewInt(0), currentValue)
 
 	return DeltaMerkleProof{
 		Index:    index,
@@ -141,25 +142,25 @@ func (zmt *ZeroMerkleTree) SetLeaf(index int, value MerkleNodeValue) DeltaMerkle
 }
 
 // GetLeaf retrieves a leaf value from the Merkle tree
-func (zmt *ZeroMerkleTree) GetLeaf(index int) MerkleProof {
+func (zmt *ZeroMerkleTree) GetLeaf(index *big.Int) MerkleProof {
 	var siblings []MerkleNodeValue
 
 	value := zmt.NodeStore.Get(zmt.Height, index)
-	currentIndex := index
+	currentIndex := new(big.Int).Set(index)
 	currentValue := value
 
 	for level := zmt.Height; level >= 1; level-- {
-		if currentIndex%2 == 0 {
-			rightSibling := zmt.NodeStore.Get(level, currentIndex+1)
+		if currentIndex.Bit(0) == 0 {
+			rightSibling := zmt.NodeStore.Get(level, new(big.Int).Add(currentIndex, big.NewInt(1)))
 			currentValue = hash(currentValue, rightSibling)
 			siblings = append(siblings, rightSibling)
 		} else {
-			leftSibling := zmt.NodeStore.Get(level, currentIndex-1)
+			leftSibling := zmt.NodeStore.Get(level, new(big.Int).Sub(currentIndex, big.NewInt(1)))
 			currentValue = hash(leftSibling, currentValue)
 			siblings = append(siblings, leftSibling)
 		}
 
-		currentIndex /= 2
+		currentIndex.Rsh(currentIndex, 1)
 	}
 
 	root := currentValue
@@ -174,21 +175,24 @@ func (zmt *ZeroMerkleTree) GetLeaf(index int) MerkleProof {
 
 // GetRoot returns the root of the Merkle tree
 func (zmt *ZeroMerkleTree) GetRoot() common.Hash {
-	return common.HexToHash(string(zmt.NodeStore.Get(0, 0)))
+	return common.HexToHash(string(zmt.NodeStore.Get(0, big.NewInt(0))))
 }
 
 // ComputeMerkleRootFromProof computes the Merkle root from a proof
-func ComputeMerkleRootFromProof(siblings []MerkleNodeValue, index int, value MerkleNodeValue) MerkleNodeValue {
+func ComputeMerkleRootFromProof(siblings []MerkleNodeValue, index *big.Int, value MerkleNodeValue) MerkleNodeValue {
 	merklePathNodeValue := value
-	merklePathNodeIndex := index
+	merklePathNodeIndex := new(big.Int).Set(index)
 
 	for _, sibling := range siblings {
-		if merklePathNodeIndex%2 == 0 {
+		if merklePathNodeIndex.Bit(0) == 0 {
+			// Even index
 			merklePathNodeValue = hash(merklePathNodeValue, sibling)
 		} else {
+			// Odd index
 			merklePathNodeValue = hash(sibling, merklePathNodeValue)
 		}
-		merklePathNodeIndex /= 2
+		// Right shift index by 1 bit (divide by 2)
+		merklePathNodeIndex.Rsh(merklePathNodeIndex, 1)
 	}
 
 	return merklePathNodeValue

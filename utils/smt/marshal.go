@@ -2,7 +2,6 @@ package smt
 
 import (
 	"encoding/json"
-	"strconv"
 )
 
 func (d DeltaMerkleProof) MarshalJSON() ([]byte, error) {
@@ -11,7 +10,7 @@ func (d DeltaMerkleProof) MarshalJSON() ([]byte, error) {
 		Index string `json:"index"`
 		*Proof
 	}{
-		Index: strconv.FormatInt(int64(d.Index), 16),
+		Index: d.Index.Text(16),
 		Proof: (*Proof)(&d),
 	})
 }
