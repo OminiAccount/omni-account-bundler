@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/OAAC/cli"
+	"github.com/OAB/cli"
 	"github.com/ethereum/go-ethereum/log"
 	"os"
 )
