@@ -2,9 +2,9 @@ package types
 
 import (
 	"context"
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state/types"
-	"github.com/OAAC/utils/chains"
+	"github.com/OAB/pool"
+	"github.com/OAB/state/types"
+	"github.com/OAB/utils/chains"
 )
 
 type (
@@ -19,5 +19,6 @@ type (
 
 	StateInterface interface {
 		AddNewMapping(mapping types.AccountMapping) error
+		AddTicket(ticket pool.TicketFull) error
 	}
 )

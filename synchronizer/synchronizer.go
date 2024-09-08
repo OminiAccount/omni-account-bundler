@@ -2,10 +2,10 @@ package synchronizer
 
 import (
 	"context"
-	"github.com/OAAC/pool"
-	stateTypes "github.com/OAAC/state/types"
-	"github.com/OAAC/synchronizer/types"
-	"github.com/OAAC/utils/chains"
+	"github.com/OAB/pool"
+	stateTypes "github.com/OAB/state/types"
+	"github.com/OAB/synchronizer/types"
+	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
 )
@@ -85,6 +85,11 @@ func (s *Synchronizer) syncTickets() {
 				return
 			}
 			s.logger.Info("Synchronize to a new ticket")
+			// check
+			//err := s.state.AddTicket(ticket)
+			//if err != nil {
+			//	s.logger.Warn("Failed to synchronize to a new ticket", "error", err)
+			//}
 			s.pool.AddTicket(ticket)
 		case <-s.ctx.Done():
 			s.logger.Warn("Stopping Sync due to context cancellation")
@@ -108,15 +113,10 @@ func (s *Synchronizer) syncAccountCreated() {
 	//	// get all events
 	//	time.Sleep(3 * time.Second)
 	//	mappingInsert := stateTypes.AccountMapping{
-	//		User:    common.HexToAddress("69299a9dfcc793e9780a0115bf3b45b4deca2463"),
-	//		Account: common.HexToAddress("fd63ed0566a782ef57f559c6f5f9afece4866423"),
+	//		User:    common.HexToAddress("01b7cA9d6B8Ac943185E107e4BE7430e5D90B5A5"),
+	//		Account: common.HexToAddress("5C7feffd7955E5fCA77e64f01cC911C255Ee6d55"),
 	//	}
 	//	ch <- mappingInsert
-	//	mappingInsert1 := stateTypes.AccountMapping{
-	//		User:    common.HexToAddress("27916984c665f15041929B68451303136FA16653"),
-	//		Account: common.HexToAddress("93d53D2d8f0d623C5cbE46daa818177a450bd9f7"),
-	//	}
-	//	ch <- mappingInsert1
 	//}()
 
 	for {

@@ -1,8 +1,8 @@
 package types
 
 import (
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state"
+	"github.com/OAB/pool"
+	"github.com/OAB/state"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
@@ -17,4 +17,5 @@ type StateInterface interface {
 	GetAccountsForUser(user common.Address) *[]common.Address
 	GetBalanceAndNonceForAccount(account common.Address, chainId uint64) (*big.Int, uint64)
 	GetUserOpsForAccount(user, account common.Address) (*[]pool.UserOperation, error)
+	AddUserOperation(userOp pool.UserOperation) error
 }

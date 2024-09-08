@@ -46,7 +46,7 @@ func (p *Pool) AddUserOp(op SignedUserOperation) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.logger.Info("Add a new userOp", "nonce", op.Nonce)
+	p.logger.Info("Add a new userOp", "sender", op.Sender, "nonce", op.Nonce, "chainId", op.ChainId.ToInt().Uint64())
 
 	p.storage.addUserOp(op)
 	p.CheckFlush()

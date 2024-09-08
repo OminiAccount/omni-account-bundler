@@ -1,7 +1,7 @@
 package sqldb
 
 import (
-	"github.com/OAAC/database"
+	"github.com/OAB/database"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -12,7 +12,7 @@ import (
 
 const (
 	// PoolMigrationName is the name of the migration used by packr to pack the migration file
-	PoolMigrationName = "oaac-pool-db"
+	PoolMigrationName = "OAB-pool-db"
 )
 
 type DB struct {

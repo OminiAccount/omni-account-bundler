@@ -1,11 +1,10 @@
 package pool
 
 import (
-	msgpack2 "github.com/OAAC/utils/msgpack"
+	"fmt"
+	"github.com/OAB/utils/msgpack"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
-
-// Todo: Persistence module
 
 var (
 	TicketsPersistenceKey = []byte("TicketsKey")
@@ -49,7 +48,7 @@ func (s *Storage) empty() {
 }
 
 func (s *Storage) cacheTickets() error {
-	data, err := msgpack2.MarshalStruct(s.tickets)
+	data, err := msgpack.MarshalStruct(s.tickets)
 	if err != nil {
 		return err
 	}
@@ -72,17 +71,18 @@ func (s *Storage) loadTickets() error {
 			return err
 		}
 
-		decodeTicket, err := msgpack2.UnmarshalStruct[[]TicketFull](ticketsData)
+		decodeTicket, err := msgpack.UnmarshalStruct[[]TicketFull](ticketsData)
 		if err != nil {
 			return err
 		}
 		s.tickets = decodeTicket
+		fmt.Println("load cache tickets length ", len(s.tickets))
 	}
 	return nil
 }
 
 func (s *Storage) cacheUserOps() error {
-	data, err := msgpack2.MarshalStruct(s.userOps)
+	data, err := msgpack.MarshalStruct(s.userOps)
 	if err != nil {
 		return err
 	}
@@ -105,11 +105,13 @@ func (s *Storage) loadUserOps() error {
 			return err
 		}
 
-		decodeSigUserOps, err := msgpack2.UnmarshalStruct[[]SignedUserOperation](userOpsData)
+		decodeSigUserOps, err := msgpack.UnmarshalStruct[[]SignedUserOperation](userOpsData)
 		if err != nil {
 			return err
 		}
 		s.userOps = decodeSigUserOps
+		fmt.Println("load cache userOps length ", len(s.userOps))
+		//s.userOps = []SignedUserOperation{}
 	}
 	return nil
 }

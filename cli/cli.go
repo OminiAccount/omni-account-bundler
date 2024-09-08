@@ -1,12 +1,12 @@
 package cli
 
 import (
-	"github.com/OAAC/config"
-	"github.com/OAAC/processor"
+	"github.com/OAB/config"
+	"github.com/OAB/processor"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/urfave/cli/v2"
 
-	oaLog "github.com/OAAC/utils/log"
+	oaLog "github.com/OAB/utils/log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -30,12 +30,12 @@ var (
 	}
 )
 
-// runProcessor is the entrypoint into the OAAC(Omni Account Abstraction Client) Processor service.
+// runProcessor is the entrypoint into the OAB(Omni Account Abstraction Client) Processor service.
 func runProcessor(ctx *cli.Context) error {
 	configPath := ctx.String(ConfigFlag.Name)
 	conf, err := config.LoadConfig(configPath)
 
-	log.Info("Starting OAAC processor")
+	log.Info("Starting OAB processor")
 
 	if err != nil {
 		log.Crit("Failed to load config", "message", err)
@@ -43,7 +43,7 @@ func runProcessor(ctx *cli.Context) error {
 
 	processor, err := processor.NewProcessor(conf)
 	if err != nil {
-		log.Error("Unable to create OAAC processor", "error", err)
+		log.Error("Unable to create OAB processor", "error", err)
 		return err
 	}
 
@@ -51,7 +51,7 @@ func runProcessor(ctx *cli.Context) error {
 		return err
 	}
 
-	log.Info("OAAC Processor started")
+	log.Info("OAB Processor started")
 
 	signalChan := make(chan os.Signal)
 	// SIGHUP: terminal closed
@@ -91,7 +91,7 @@ func NewCli(GitVersion string, GitCommit string, GitDate string) *Cli {
 	app := &cli.App{
 		Name:        "Processor",
 		Version:     "test",
-		Description: "An OAAC Processor",
+		Description: "An OAB Processor",
 		Commands: []*cli.Command{
 			{
 				Name:        "processor",

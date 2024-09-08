@@ -2,7 +2,7 @@ package state
 
 import (
 	"fmt"
-	"github.com/OAAC/utils/smt"
+	"github.com/OAB/utils/smt"
 	"github.com/ethereum/go-ethereum/common"
 )
 

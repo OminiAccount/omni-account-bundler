@@ -2,9 +2,9 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
-	"github.com/OAAC/ethereum"
-	"github.com/OAAC/jsonrpc/rpcs"
-	"github.com/OAAC/pool"
+	"github.com/OAB/ethereum"
+	"github.com/OAB/jsonrpc/rpcs"
+	"github.com/OAB/pool"
 	_ "github.com/spf13/viper"
 	"os"
 )

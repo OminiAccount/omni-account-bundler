@@ -3,10 +3,10 @@ package state
 import (
 	"context"
 	"fmt"
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state/types"
-	"github.com/OAAC/utils/queue"
-	"github.com/OAAC/utils/smt"
+	"github.com/OAB/pool"
+	"github.com/OAB/state/types"
+	"github.com/OAB/utils/queue"
+	"github.com/OAB/utils/smt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
@@ -69,7 +69,10 @@ func (s *State) ProcessBatch() {
 		select {
 		case batchContext := <-s.pool.Context():
 			s.logger.Debug("Processing batch", "batchContext", batchContext)
-			s.processBatch(batchContext)
+			err := s.processBatch(batchContext)
+			if err != nil {
+				s.logger.Warn("failed process a batch", "error", err)
+			}
 		case <-ticker.C:
 		// Todo: Here you can add processing logic, such as periodically checking the status of the pool or other tasks.
 		case <-s.ctx.Done():
@@ -93,7 +96,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	batch.SetOldSMTRoot(s.tree.GetRoot())
 
 	// Set tickets
-	var depositTickets, withdrawTickets []TicketProof
+	var depositTickets, withdrawTickets []TicketInput
 
 	for _, ticketFull := range batchContext.SortedTickets() {
 		fmt.Println("old root", s.tree.GetRoot())
@@ -128,7 +131,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		// Set newBalance
 		delta := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
 		fmt.Println("new root", s.tree.GetRoot())
-		ticketProof := TicketProof{
+		ticketProof := TicketInput{
 			Ticket:      &ticketFull.Ticket,
 			TicketProof: &delta,
 		}
@@ -147,7 +150,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	batch.SetWithdrawTickets(withdrawTickets)
 
 	// Set user operations
-	var userOperationProof []UserOperationProof
+	var userOperationProof []UserOperationInput
 
 	for _, userOperation := range batchContext.SignedUserOperations() {
 		fmt.Println("Nonce========", userOperation.Nonce)
@@ -160,14 +163,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		balance.SetString(string(balanceMerkleProof.Value), 16)
 		fmt.Println("oldBalance", balance)
 
-		var totalGas big.Int
-		totalGas.Add(big.NewInt(int64(userOperation.CallGasLimit)), big.NewInt(int64(userOperation.VerificationGasLimit)))
-		totalGas.Add(&totalGas, userOperation.PreVerificationGas.ToInt())
-		var totalGasCoeff big.Int
-		totalGasCoeff.Add(userOperation.MaxFeePerGas.ToInt(), userOperation.MaxPriorityFeePerGas.ToInt())
-		var gas big.Int
-		gas.Mul(&totalGas, &totalGasCoeff)
-		balance.Sub(&balance, &gas)
+		balance.Sub(&balance, userOperation.CalculateGasUsed())
 		fmt.Println("newBalance", balance)
 
 		// nonce
@@ -185,20 +181,19 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 
 		newNonceMerkleProof := s.tree.SetLeaf(nonceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(nonce.Bytes(), 32))))
 		fmt.Println("new root", s.tree.GetRoot())
-		domainInfo := pool.EIP712Domain{
-			Name:              "OMNI-ACCOUNT",
-			Version:           "1.0",
-			ChainId:           11155111,
-			VerifyingContract: common.HexToAddress("0x5F2464f924b7D9166a870cCe9201AFBC2a2f151D"),
-		}
-		userOperationProof = append(userOperationProof, UserOperationProof{
+
+		userOperationProof = append(userOperationProof, UserOperationInput{
 			UserOperation:     userOperation.UserOperation,
 			Signature:         userOperation.Signature[0:64],
 			EthRecoveryId:     userOperation.RecoverId(),
-			DomainInfo:        domainInfo,
 			BalanceDeltaProof: &newBalanceMerkleProof,
 			NonceDeltaProof:   &newNonceMerkleProof,
 		})
+		//expectGasBalance, expectNonce := s.storage.Account.GetAccountInfoByAccountAndChainId(userOperation.Sender, userOperation.ChainId.ToInt().Uint64())
+		//fmt.Println("expectGasBalance", expectGasBalance)
+		//fmt.Println("smtGasBalance", balance)
+		//fmt.Println("expectNonce", expectNonce)
+		//fmt.Println("smtNonce", nonce)
 		err = s.storage.Account.AddUserOperation(*userOperation.UserOperation)
 		if err != nil {
 			return err
@@ -241,6 +236,7 @@ func (s *State) executeBatch() error {
 		if err != nil {
 			return err
 		}
+		// Todo: The target chain should be listening for synchronous events
 	} else {
 		s.logger.Debug("the proven queue is empty")
 	}
@@ -252,6 +248,14 @@ func (s *State) AddNewMapping(mapping types.AccountMapping) error {
 	return s.storage.Account.AddNewMapping(mapping)
 }
 
+func (s *State) AddTicket(ticket pool.TicketFull) error {
+	return s.storage.Account.AddTicket(ticket)
+}
+
+func (s *State) AddUserOperation(userOp pool.UserOperation) error {
+	return s.storage.Account.AddUserOperation(userOp)
+}
+
 func (s *State) GetAccountsForUser(user common.Address) *[]common.Address {
 	return s.storage.Account.GetAccountsForUser(user)
 }
@@ -261,6 +265,7 @@ func (s *State) GetUserOpsForAccount(user, account common.Address) (*[]pool.User
 }
 
 func (s *State) GetBalanceAndNonceForAccount(account common.Address, chainId uint64) (*big.Int, uint64) {
+	//return s.storage.Account.GetAccountInfoByAccountAndChainId(account, chainId)
 	var balance big.Int
 	balanceKeyIndex := smt.ComputeBalanceIndex(account.Bytes())
 	balanceMerkleProof := s.tree.GetLeaf(balanceKeyIndex)
@@ -294,6 +299,7 @@ func (s *State) LoadCache() {
 	}
 	if tree != nil {
 		s.tree = tree
+		s.logger.Info("Load smt root success", "root", s.tree.GetRoot().String())
 	}
 
 }

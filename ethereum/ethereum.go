@@ -3,11 +3,11 @@ package ethereum
 import (
 	"context"
 	"fmt"
-	"github.com/OAAC/ethereum/contracts/EntryPoint"
-	"github.com/OAAC/ethereum/contracts/SimpleAccountFactory"
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state/types"
-	"github.com/OAAC/utils/chains"
+	"github.com/OAB/ethereum/contracts/EntryPoint"
+	"github.com/OAB/ethereum/contracts/SimpleAccountFactory"
+	"github.com/OAB/pool"
+	"github.com/OAB/state/types"
+	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -187,7 +187,7 @@ func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hex
 	//opts.Nonce = big.NewInt(1)
 	//opts.GasLimit = uint64(47860)
 	//opts.GasPrice = big.NewInt(1)
-	opts.Value = big.NewInt(146839574447005)
+	opts.Value = big.NewInt(6000000000000000)
 
 	entryPoint := ether.ChainsClient[chains.ChainId(ether.chainId)].EntryPoint
 

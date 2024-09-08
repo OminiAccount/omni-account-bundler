@@ -2,9 +2,9 @@ package jsonrpc
 
 import (
 	"fmt"
-	"github.com/OAAC/jsonrpc/types"
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state"
+	"github.com/OAB/jsonrpc/types"
+	"github.com/OAB/pool"
+	"github.com/OAB/state"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
@@ -25,6 +25,11 @@ func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) 
 	if len(signedUserOp.InitCode) != 0 {
 		return fmt.Errorf("creation of AA contracts is not supported")
 	}
+	//// check
+	//err := e.state.AddUserOperation(*signedUserOp.UserOperation)
+	//if err != nil {
+	//	return err
+	//}
 	e.pool.AddUserOp(signedUserOp)
 	return nil
 }

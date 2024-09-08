@@ -1,10 +1,10 @@
 package processor
 
 import (
-	"github.com/OAAC/jsonrpc"
-	"github.com/OAAC/jsonrpc/rpcs"
-	"github.com/OAAC/pool"
-	"github.com/OAAC/state"
+	"github.com/OAB/jsonrpc"
+	"github.com/OAB/jsonrpc/rpcs"
+	"github.com/OAB/pool"
+	"github.com/OAB/state"
 )
 
 func createJSONRPCServer(cfg rpcs.RpcsConfig, pool *pool.Pool, state *state.State) *jsonrpc.Server {

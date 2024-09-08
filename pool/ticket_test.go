@@ -2,7 +2,7 @@ package pool
 
 import (
 	"fmt"
-	msgpack2 "github.com/OAAC/utils/msgpack"
+	"github.com/OAB/utils/msgpack"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
@@ -24,13 +24,13 @@ func TestMsgPack(t *testing.T) {
 		Type: Deposit,
 	}
 
-	data, err := msgpack2.MarshalStruct(ticket)
+	data, err := msgpack.MarshalStruct(ticket)
 	if err != nil {
 		fmt.Println("Error marshaling:", err)
 		return
 	}
 
-	decodeTicket, err := msgpack2.UnmarshalStruct[TicketFull](data)
+	decodeTicket, err := msgpack.UnmarshalStruct[TicketFull](data)
 	if err != nil {
 		fmt.Println("Error unmarshaling:", err)
 		return

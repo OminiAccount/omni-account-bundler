@@ -1,4 +1,4 @@
-module github.com/OAAC
+module github.com/OAB
 
 go 1.22.4
 

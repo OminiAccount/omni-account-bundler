@@ -3,8 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
-	"github.com/OAAC/pool"
+	"github.com/OAB/pool"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 const UserHaveAccountsMaxNumber = 1
@@ -12,8 +13,22 @@ const UserHaveAccountsMaxNumber = 1
 type UserAccount map[common.Address]map[common.Address]AccountInfo
 
 type AccountInfo struct {
-	Nonce          uint64
+	Nonce          map[uint64]uint64
+	Gas            *big.Int
 	UserOperations []pool.UserOperation
+}
+
+func (info *AccountInfo) IncreaseNonce(chainId uint64) {
+	info.Nonce[chainId]++
+}
+
+func (info *AccountInfo) RemainingGas(operation pool.UserOperation) bool {
+	usedGas := operation.CalculateGasUsed()
+	if info.Gas.Cmp(usedGas) >= 0 {
+		info.Gas.Sub(info.Gas, usedGas)
+		return true
+	}
+	return false
 }
 
 type AccountMapping struct {
@@ -37,8 +52,46 @@ func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
 	}
 
 	(*u)[mapping.User][mapping.Account] = AccountInfo{
-		Nonce:          0,
+		Nonce:          make(map[uint64]uint64),
+		Gas:            big.NewInt(0),
 		UserOperations: []pool.UserOperation{},
+	}
+	return nil
+}
+
+func (u *UserAccount) AddTicket(ticket pool.TicketFull) error {
+	// ticket.User is Account address
+	user, exists := u.FindUserByAccount(ticket.User)
+	if !exists {
+		return fmt.Errorf("exists error %s", ticket.User)
+	}
+	accountInfo, exists := (*u)[user][ticket.User]
+	if !exists {
+		return fmt.Errorf("exists error %s", ticket.User)
+	}
+	actionAmount := ticket.Amount.ToInt()
+
+	balance := accountInfo.Gas
+
+	operation := func() error {
+		switch ticket.Type {
+		case pool.Deposit:
+			balance.Add(balance, actionAmount)
+		case pool.Withdraw:
+			if balance.Cmp(actionAmount) < 0 {
+				return fmt.Errorf("current account balance %s is insufficient to withdraw %s", &balance, actionAmount)
+			}
+			balance.Sub(balance, actionAmount)
+		default:
+			return fmt.Errorf("unsupported ticket type: %v", ticket.Type)
+		}
+		return nil
+	}
+
+	accountInfo.Gas = balance
+
+	if err := operation(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -52,6 +105,13 @@ func (u *UserAccount) AddUserOperation(userOp pool.UserOperation) error {
 	if !exists {
 		return fmt.Errorf("exists error %s", userOp.Sender)
 	}
+	//// check gas
+	//if accountInfo.RemainingGas(userOp) {
+	//	return fmt.Errorf("insufficient gas balance")
+	//}
+	//
+	//// nonce ++
+	//accountInfo.IncreaseNonce(uint64(userOp.Nonce))
 	accountInfo.UserOperations = append(accountInfo.UserOperations, userOp)
 
 	(*u)[user][userOp.Sender] = accountInfo
@@ -88,4 +148,16 @@ func (u *UserAccount) GetUserOpsForAccount(user, account common.Address) (*[]poo
 		return nil, fmt.Errorf("exists error %s %s", user, account)
 	}
 	return &accountInfo.UserOperations, nil
+}
+
+func (u *UserAccount) GetAccountInfoByAccountAndChainId(account common.Address, chainId uint64) (*big.Int, uint64) {
+	user, exists := u.FindUserByAccount(account)
+	if !exists {
+		return nil, 0
+	}
+	accountInfo, exists := (*u)[user][account]
+	if !exists {
+		return nil, 0
+	}
+	return accountInfo.Gas, accountInfo.Nonce[chainId]
 }

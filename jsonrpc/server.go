@@ -1,7 +1,7 @@
 package jsonrpc
 
 import (
-	"github.com/OAAC/jsonrpc/rpcs"
+	"github.com/OAB/jsonrpc/rpcs"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"net"

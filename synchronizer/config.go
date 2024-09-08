@@ -1,6 +1,6 @@
 package synchronizer
 
-import "github.com/OAAC/ethereum"
+import "github.com/OAB/ethereum"
 
 type Config struct {
 	EthereumCfg ethereum.Config
