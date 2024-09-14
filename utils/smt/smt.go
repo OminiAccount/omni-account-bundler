@@ -221,3 +221,37 @@ func VerifyDeltaMerkleProof(deltaProof DeltaMerkleProof) bool {
 
 	return VerifyMerkleProof(oldProof) && VerifyMerkleProof(newProof)
 }
+
+// RollbackMerkleTree rolls back the ZeroMerkleTree to the previous state using DeltaMerkleProof.
+func (zmt *ZeroMerkleTree) RollbackMerkleTree(proof DeltaMerkleProof) error {
+	// Verify the DeltaMerkleProof to ensure it's valid before applying rollback
+	if !VerifyDeltaMerkleProof(proof) {
+		return fmt.Errorf("invalid DeltaMerkleProof")
+	}
+
+	// Rollback operation: replace the new value with the old value
+	index := proof.Index
+	oldValue := proof.OldValue
+
+	currentIndex := new(big.Int).Set(index)
+	currentValue := oldValue
+
+	for level := zmt.Height; level >= 1; level-- {
+		zmt.NodeStore.Set(level, currentIndex, currentValue)
+
+		if currentIndex.Bit(0) == 0 {
+			rightSibling := proof.Siblings[zmt.Height-level]
+			currentValue = hash(currentValue, rightSibling)
+		} else {
+			leftSibling := proof.Siblings[zmt.Height-level]
+			currentValue = hash(leftSibling, currentValue)
+		}
+
+		currentIndex.Rsh(currentIndex, 1)
+	}
+
+	// Set the old root as the current root
+	zmt.NodeStore.Set(0, big.NewInt(0), proof.OldRoot)
+
+	return nil
+}

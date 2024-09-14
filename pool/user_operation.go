@@ -71,6 +71,7 @@ func (su *SignedUserOperation) RecoverId() uint8 {
 	return v
 }
 
+// CalculateGasUsed Todo: Update to contract calculateGasUsed
 func (u *UserOperation) CalculateGasUsed() *big.Int {
 	var totalGas big.Int
 	totalGas.Add(big.NewInt(int64(u.CallGasLimit)), big.NewInt(int64(u.VerificationGasLimit)))

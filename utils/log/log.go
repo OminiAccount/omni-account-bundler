@@ -16,5 +16,5 @@ func SetGlobalLogHandler(h slog.Handler) {
 }
 
 func SetupDefaults() {
-	SetGlobalLogHandler(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelInfo, true))
+	SetGlobalLogHandler(log.NewTerminalHandlerWithLevel(os.Stdout, log.LevelDebug, true))
 }

@@ -187,7 +187,7 @@ func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hex
 	//opts.Nonce = big.NewInt(1)
 	//opts.GasLimit = uint64(47860)
 	//opts.GasPrice = big.NewInt(1)
-	opts.Value = big.NewInt(6000000000000000)
+	opts.Value = big.NewInt(9000000000000000)
 
 	entryPoint := ether.ChainsClient[chains.ChainId(ether.chainId)].EntryPoint
 

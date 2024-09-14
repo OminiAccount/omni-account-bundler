@@ -83,17 +83,21 @@ func (s *State) ProcessBatch() {
 	}
 }
 
-// save to storage
-var number uint64
-
 func (s *State) processBatch(batchContext pool.BatchContext) error {
-	batch, err := NewBatch(number)
+	batch, err := NewBatch(s.storage.BatchNumber)
 	if err != nil {
 		return err
 	}
 
 	// Set old smt root
 	batch.SetOldSMTRoot(s.tree.GetRoot())
+	var stateDiff *smt.DeltaMerkleProof
+
+	updateDiff := func(diff *smt.DeltaMerkleProof) {
+		if stateDiff == nil {
+			stateDiff = diff
+		}
+	}
 
 	// Set tickets
 	var depositTickets, withdrawTickets []TicketInput
@@ -144,6 +148,7 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		}
 
 		fmt.Println("Ticket newBalance", balance)
+		updateDiff(&delta)
 	}
 
 	batch.SetDepositTickets(depositTickets)
@@ -153,6 +158,10 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 	var userOperationProof []UserOperationInput
 
 	for _, userOperation := range batchContext.SignedUserOperations() {
+		err = s.storage.Account.AddUserOperation(*userOperation.UserOperation)
+		if err != nil {
+			return err
+		}
 		fmt.Println("Nonce========", userOperation.Nonce)
 		fmt.Println("old root", s.tree.GetRoot())
 		// balance
@@ -172,12 +181,13 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		nonceKeyIndex := smt.KeyToIndex(nonceKey)
 		nonceMerkleProof := s.tree.GetLeaf(nonceKeyIndex)
 		nonce.SetString(string(nonceMerkleProof.Value), 16)
-		fmt.Println("oldNonce", nonce)
+		fmt.Println("oldNonce", nonce.Uint64())
 		nonce.Add(&nonce, big.NewInt(1))
-		fmt.Println("newNonce", nonce)
+		fmt.Println("newNonce", nonce.Uint64())
 
 		// merkle proof
 		newBalanceMerkleProof := s.tree.SetLeaf(balanceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(balance.Bytes(), 32))))
+		updateDiff(&newBalanceMerkleProof)
 
 		newNonceMerkleProof := s.tree.SetLeaf(nonceKeyIndex, smt.MerkleNodeValue(common.Bytes2Hex(common.LeftPadBytes(nonce.Bytes(), 32))))
 		fmt.Println("new root", s.tree.GetRoot())
@@ -194,19 +204,19 @@ func (s *State) processBatch(batchContext pool.BatchContext) error {
 		//fmt.Println("smtGasBalance", balance)
 		//fmt.Println("expectNonce", expectNonce)
 		//fmt.Println("smtNonce", nonce)
-		err = s.storage.Account.AddUserOperation(*userOperation.UserOperation)
-		if err != nil {
-			return err
-		}
 	}
 
 	batch.SetUserOperationProofs(userOperationProof)
 
 	// mock
-	number++
 	s.proofQueue.Enqueue(*batch)
 
-	s.logger.Info("Successfully sealing a batch", "number", number)
+	if stateDiff != nil {
+		s.storage.updateStateDiff(stateDiff)
+	} else {
+		s.logger.Info("This batch has not stateDiff", "number", s.storage.BatchNumber)
+	}
+	s.logger.Info("Successfully sealing a batch", "number", s.storage.BatchNumber, "stateRoot", s.tree.GetRoot().String())
 	return nil
 }
 
@@ -237,8 +247,6 @@ func (s *State) executeBatch() error {
 			return err
 		}
 		// Todo: The target chain should be listening for synchronous events
-	} else {
-		s.logger.Debug("the proven queue is empty")
 	}
 
 	return nil
@@ -279,9 +287,9 @@ func (s *State) GetBalanceAndNonceForAccount(account common.Address, chainId uin
 }
 
 func (s *State) Persistence() {
-	s.logger.Info("cache UserAccount info into disk")
+	s.logger.Info("Cache StateContext info into disk")
 	if err := s.storage.cache(); err != nil {
-		s.logger.Error("Cache UserAccount info into disk error", "error", err)
+		s.logger.Error("Cache StateContext info into disk error", "error", err)
 	}
 	if err := s.storage.cacheSmt(s.tree); err != nil {
 		s.logger.Error("Cache Smt into disk error", "error", err)
@@ -289,9 +297,9 @@ func (s *State) Persistence() {
 }
 
 func (s *State) LoadCache() {
-	s.logger.Info("Load UserAccount info from disk")
+	s.logger.Info("Load StateContext info from disk")
 	if err := s.storage.loadCache(); err != nil {
-		s.logger.Error("Load UserAccount info from disk error", "error", err)
+		s.logger.Error("Load StateContext info from disk error", "error", err)
 	}
 	tree, err := s.storage.loadCacheSmt()
 	if err != nil {
@@ -299,7 +307,21 @@ func (s *State) LoadCache() {
 	}
 	if tree != nil {
 		s.tree = tree
-		s.logger.Info("Load smt root success", "root", s.tree.GetRoot().String())
+		if true {
+			diff := s.storage.StateProof[0]
+			if err = s.tree.RollbackMerkleTree(*diff); err != nil {
+				s.logger.Error("Failed to rollback smt", "error", err)
+			} else {
+				if s.storage.BatchNumber != 0 {
+					s.storage.BatchNumber--
+					s.logger.Info("Rollback smt success")
+				} else {
+					s.storage.BatchNumber = 0
+				}
+
+			}
+		}
+		s.logger.Info("Load smt success", "number", s.storage.BatchNumber, "root", s.tree.GetRoot().String())
 	}
 
 }

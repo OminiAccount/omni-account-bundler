@@ -8,47 +8,57 @@ import (
 )
 
 var (
-	AccountPersistenceKey = []byte("AccountKey")
-	SmtPersistenceKey     = []byte("SmtKey")
+	storageKey        = []byte("StateContextKey")
+	SmtPersistenceKey = []byte("SmtKey")
 )
 
 type Storage struct {
-	Account *types.UserAccount
-	db      ethdb.Database
+	Account     *types.UserAccount
+	BatchNumber uint64
+	StateProof  map[uint64]*smt.DeltaMerkleProof
+	db          ethdb.Database
 }
 
 func NewStorage(db ethdb.Database) *Storage {
-	return &Storage{Account: types.NewUserAccount(), db: db}
+	return &Storage{Account: types.NewUserAccount(), BatchNumber: 0, StateProof: make(map[uint64]*smt.DeltaMerkleProof), db: db}
+}
+
+func (s *Storage) updateStateDiff(diff *smt.DeltaMerkleProof) {
+	s.StateProof[s.BatchNumber] = diff
+	s.BatchNumber++
 }
 
 func (s *Storage) cache() error {
-	data, err := msgpack.MarshalStruct(s.Account)
+	data, err := msgpack.MarshalStruct(s)
 	if err != nil {
 		return err
 	}
 
-	if err := s.db.Put(AccountPersistenceKey, data); err != nil {
+	if err = s.db.Put(storageKey, data); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func (s *Storage) loadCache() error {
-	has, err := s.db.Has(AccountPersistenceKey)
+	has, err := s.db.Has(storageKey)
 	if err != nil {
 		return err
 	}
 	if has {
-		accountData, err := s.db.Get(AccountPersistenceKey)
+		data, err := s.db.Get(storageKey)
 		if err != nil {
 			return err
 		}
 
-		decodeData, err := msgpack.UnmarshalStruct[types.UserAccount](accountData)
+		decodeData, err := msgpack.UnmarshalStruct[Storage](data)
 		if err != nil {
 			return err
 		}
-		s.Account = &decodeData
+		s.Account = decodeData.Account
+		s.BatchNumber = decodeData.BatchNumber
+		s.StateProof = decodeData.StateProof
 	}
 
 	return nil

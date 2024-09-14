@@ -6,8 +6,10 @@ import (
 	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/chains"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
+	"time"
 )
 
 type Synchronizer struct {
@@ -68,13 +70,13 @@ func (s *Synchronizer) syncTickets() {
 	}
 
 	// mock
-	//go func() {
-	//	ch := make(chan pool.TicketFull)
-	//	chans = append(chans, ch)
-	//	time.Sleep(3 * time.Second)
-	//	insertTicket(ch)
-	//}()
-	//time.Sleep(1 * time.Second)
+	go func() {
+		ch := make(chan pool.TicketFull)
+		chans = append(chans, ch)
+		time.Sleep(3 * time.Second)
+		insertTicket(ch)
+	}()
+	time.Sleep(1 * time.Second)
 
 	ticketChannel := mergeChannels(s.ctx, chans...)
 
@@ -109,15 +111,15 @@ func (s *Synchronizer) syncAccountCreated() {
 		}
 	}(ch)
 
-	//go func() {
-	//	// get all events
-	//	time.Sleep(3 * time.Second)
-	//	mappingInsert := stateTypes.AccountMapping{
-	//		User:    common.HexToAddress("01b7cA9d6B8Ac943185E107e4BE7430e5D90B5A5"),
-	//		Account: common.HexToAddress("5C7feffd7955E5fCA77e64f01cC911C255Ee6d55"),
-	//	}
-	//	ch <- mappingInsert
-	//}()
+	go func() {
+		// get all events
+		time.Sleep(3 * time.Second)
+		mappingInsert := stateTypes.AccountMapping{
+			User:    common.HexToAddress("27916984c665f15041929B68451303136FA16653"),
+			Account: common.HexToAddress("D31959035048676fc27d84C8Bc120997204b16B6"),
+		}
+		ch <- mappingInsert
+	}()
 
 	for {
 		select {

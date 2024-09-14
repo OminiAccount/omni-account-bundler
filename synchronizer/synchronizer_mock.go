@@ -29,25 +29,17 @@ func createAndSendTicket(ticketChannel chan<- pool.TicketFull, userAddress strin
 func insertTicket(ticketChannel chan<- pool.TicketFull) {
 	createAndSendTicket(
 		ticketChannel,
-		"0x5C7feffd7955E5fCA77e64f01cC911C255Ee6d55",
+		"0xD31959035048676fc27d84C8Bc120997204b16B6",
+		"0x6f05b59d3b20000",
+		"0x66e2aacc",
+		pool.Deposit,
+	)
+
+	createAndSendTicket(
+		ticketChannel,
+		"0xD31959035048676fc27d84C8Bc120997204b16B6",
 		"0x16345785d8a0000",
-		"0x66dd58f0",
-		pool.Deposit,
-	)
-
-	createAndSendTicket(
-		ticketChannel,
-		"0x5C7feffd7955E5fCA77e64f01cC911C255Ee6d55",
-		"0x2c68af0bb140000",
-		"0x66dd58fc",
-		pool.Deposit,
-	)
-
-	createAndSendTicket(
-		ticketChannel,
-		"0x5C7feffd7955E5fCA77e64f01cC911C255Ee6d55",
-		"0x2386f26fc10000",
-		"0x66dd59a4",
+		"0x66e2ab08",
 		pool.Withdraw,
 	)
 
