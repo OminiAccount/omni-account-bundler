@@ -63,7 +63,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	}
 
 	// Synchronizer
-	synchronizer, err := synchronizer.NewSynchronizer(poolInstance, ethereum, state, synchronizer.Config{EthereumCfg: cfg.Ethereum})
+	synchronizer, err := synchronizer.NewSynchronizer(ethereum, state, synchronizer.Config{EthereumCfg: cfg.Ethereum})
 	if err != nil {
 		return nil, err
 	}

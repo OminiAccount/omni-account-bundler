@@ -10,7 +10,7 @@ import (
 func createJSONRPCServer(cfg rpcs.RpcsConfig, pool *pool.Pool, state *state.State) *jsonrpc.Server {
 	s := jsonrpc.Service{
 		Name:    jsonrpc.APIEth,
-		Service: jsonrpc.NewEthEndpoints(pool, state),
+		Service: jsonrpc.NewEthEndpoints(state),
 	}
 	return jsonrpc.NewServer(cfg, s)
 }

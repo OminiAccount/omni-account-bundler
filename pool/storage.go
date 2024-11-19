@@ -7,78 +7,32 @@ import (
 )
 
 var (
-	TicketsPersistenceKey = []byte("TicketsKey")
 	UserOpsPersistenceKey = []byte("UserOpsKey")
 )
 
 type Storage struct {
-	userOps []SignedUserOperation
-	tickets []TicketFull
+	userOps []*SignedUserOperation
 
 	db ethdb.Database
 }
 
 func NewStorage(db ethdb.Database) *Storage {
 	return &Storage{
-		userOps: []SignedUserOperation{},
-		tickets: []TicketFull{},
+		userOps: []*SignedUserOperation{},
 		db:      db,
 	}
 }
 
-func (s *Storage) addTicket(ticket TicketFull) {
-	s.tickets = append(s.tickets, ticket)
-}
-
-func (s *Storage) addUserOp(userOp SignedUserOperation) {
+func (s *Storage) addUserOp(userOp *SignedUserOperation) {
 	s.userOps = append(s.userOps, userOp)
 }
 
-func (s *Storage) getTickets() []TicketFull {
-	return s.tickets
-}
-
-func (s *Storage) getUserOps() []SignedUserOperation {
+func (s *Storage) getUserOps() []*SignedUserOperation {
 	return s.userOps
 }
 
 func (s *Storage) empty() {
-	s.userOps = []SignedUserOperation{}
-	s.tickets = []TicketFull{}
-}
-
-func (s *Storage) cacheTickets() error {
-	data, err := msgpack.MarshalStruct(s.tickets)
-	if err != nil {
-		return err
-	}
-
-	if err := s.db.Put(TicketsPersistenceKey, data); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Storage) loadTickets() error {
-	has, err := s.db.Has(TicketsPersistenceKey)
-	if err != nil {
-		return err
-	}
-	if has {
-		ticketsData, err := s.db.Get(TicketsPersistenceKey)
-		if err != nil {
-			return err
-		}
-
-		decodeTicket, err := msgpack.UnmarshalStruct[[]TicketFull](ticketsData)
-		if err != nil {
-			return err
-		}
-		s.tickets = decodeTicket
-		fmt.Println("load cache tickets length ", len(s.tickets))
-	}
-	return nil
+	s.userOps = []*SignedUserOperation{}
 }
 
 func (s *Storage) cacheUserOps() error {
@@ -105,7 +59,7 @@ func (s *Storage) loadUserOps() error {
 			return err
 		}
 
-		decodeSigUserOps, err := msgpack.UnmarshalStruct[[]SignedUserOperation](userOpsData)
+		decodeSigUserOps, err := msgpack.UnmarshalStruct[[]*SignedUserOperation](userOpsData)
 		if err != nil {
 			return err
 		}

@@ -3,7 +3,7 @@ package pool
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/OAB/lib/common/hexutil"
 	"math/big"
 )
 
@@ -11,8 +11,8 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 	type dec SignedUserOperation
 	aux := &struct {
 		ChainId              string `json:"chainId"`
-		PreVerificationGas   string `json:"preVerificationGas"`
-		MaxFeePerGas         string `json:"maxFeePerGas"`
+		MainChainGasPrice    string `json:"mainChainGasPrice"`
+		DestChainGasPrice    string `json:"destChainGasPrice"`
 		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
 		*dec
 	}{
@@ -31,29 +31,31 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 		s.ChainId = (*hexutil.Big)(chainId)
 	}
 
-	if aux.PreVerificationGas != "" {
-		preVerificationGas, ok := new(big.Int).SetString(aux.PreVerificationGas, 0)
+	if aux.MainChainGasPrice != "" {
+		mainChainGasPrice, ok := new(big.Int).SetString(aux.MainChainGasPrice, 0)
 		if !ok {
-			return fmt.Errorf("invalid PreVerificationGas value: %s", aux.PreVerificationGas)
+			return fmt.Errorf("invalid MainChainGasPrice value: %s", aux.MainChainGasPrice)
 		}
-		s.PreVerificationGas = (*hexutil.Big)(preVerificationGas)
+		s.MainChainGasPrice = (*hexutil.Big)(mainChainGasPrice)
 	}
 
-	if aux.MaxFeePerGas != "" {
-		maxFeePerGas, ok := new(big.Int).SetString(aux.MaxFeePerGas, 0)
+	if aux.DestChainGasPrice != "" {
+		destChainGasPrice, ok := new(big.Int).SetString(aux.DestChainGasPrice, 0)
 		if !ok {
-			return fmt.Errorf("invalid MaxFeePerGas value: %s", aux.MaxFeePerGas)
+			return fmt.Errorf("invalid DestChainGasPrice value: %s", aux.DestChainGasPrice)
 		}
-		s.MaxFeePerGas = (*hexutil.Big)(maxFeePerGas)
+		s.DestChainGasPrice = (*hexutil.Big)(destChainGasPrice)
 	}
 
-	if aux.MaxPriorityFeePerGas != "" {
-		maxPriorityFeePerGas, ok := new(big.Int).SetString(aux.MaxPriorityFeePerGas, 0)
-		if !ok {
-			return fmt.Errorf("invalid MaxPriorityFeePerGas value: %s", aux.MaxPriorityFeePerGas)
-		}
-		s.MaxPriorityFeePerGas = (*hexutil.Big)(maxPriorityFeePerGas)
-	}
+	//if aux.MaxPriorityFeePerGas != "" {
+	//	maxPriorityFeePerGas, ok := new(big.Int).SetString(aux.MaxPriorityFeePerGas, 0)
+	//	if !ok {
+	//		return fmt.Errorf("invalid MaxPriorityFeePerGas value: %s", aux.MaxPriorityFeePerGas)
+	//	}
+	//	s.MaxPriorityFeePerGas = (*hexutil.Big)(maxPriorityFeePerGas)
+	//}
+
+	s.RecoverAddress()
 
 	return nil
 }

@@ -1,7 +1,6 @@
 package pool
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"sync"
@@ -12,7 +11,7 @@ type Pool struct {
 	mu            sync.Mutex
 	cfg           Config
 	lastFlushTime time.Time
-	context       chan BatchContext
+	context       chan *BatchContext
 	stopChan      chan struct{}
 
 	storage *Storage
@@ -24,41 +23,23 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 	pool := &Pool{
 		cfg:           cfg,
 		lastFlushTime: time.Now(),
-		context:       make(chan BatchContext, 100),
+		context:       make(chan *BatchContext, 100),
 		storage:       NewStorage(db),
 		logger:        log.New("service", "pool"),
 	}
 
 	pool.LoadCache()
 
-	// mock
-	//go func() {
-	//	time.Sleep(10 * time.Second)
-	//	pool.mockPool()
-	//}()
-
-	//go pool.StartAutoFlush()
-
 	return pool
 }
 
-func (p *Pool) AddUserOp(op SignedUserOperation) {
+func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.logger.Info("Add a new userOp", "sender", op.Sender, "nonce", op.Nonce, "chainId", op.ChainId.ToInt().Uint64())
+	p.logger.Info("Add a new sign userOperation", "sender", op.Sender.String(), "nonce", op.Nonce.Uint64(), "chainId", op.ChainId.ToInt().String(), "Owner", op.Owner.String())
 
 	p.storage.addUserOp(op)
-	p.CheckFlush()
-}
-
-func (p *Pool) AddTicket(ticket TicketFull) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.logger.Info("Add a new ticket", "ticket", ticket)
-
-	p.storage.addTicket(ticket)
 	p.CheckFlush()
 }
 
@@ -76,20 +57,15 @@ func (p *Pool) CheckFlush() {
 }
 
 func (p *Pool) Flush() {
-	fmt.Println("Flushing memory pool...")
+	log.Debug("Flushing memory pool...")
 
-	context := BatchContext{
-		userOps: p.storage.getUserOps(),
-		tickets: p.storage.getTickets(),
-	}
+	context := NewBatchContext(p.storage.getUserOps())
 
 	// Empty the memory pool
 	p.storage.empty()
 	p.lastFlushTime = time.Now()
 
 	// Execute specific processing logic
-	fmt.Println("UserOps:", len(context.userOps))
-	fmt.Println("Tickets:", len(context.tickets))
 	p.context <- context
 }
 
@@ -110,14 +86,11 @@ func (p *Pool) StopAutoFlush() {
 	close(p.stopChan)
 }
 
-func (p *Pool) Context() chan BatchContext {
+func (p *Pool) Context() chan *BatchContext {
 	return p.context
 }
 
 func (p *Pool) Cache() {
-	if err := p.storage.cacheTickets(); err != nil {
-		p.logger.Error("pool cache tickets error", "error", err)
-	}
 	if err := p.storage.cacheUserOps(); err != nil {
 		p.logger.Error("pool cache userOps error", "error", err)
 	}
@@ -125,9 +98,6 @@ func (p *Pool) Cache() {
 
 func (p *Pool) LoadCache() {
 	p.logger.Info("Load cache")
-	if err := p.storage.loadTickets(); err != nil {
-		p.logger.Error("pool load cache tickets error", "error", err)
-	}
 	if err := p.storage.loadUserOps(); err != nil {
 		p.logger.Error("pool load cache userOps error", "error", err)
 	}

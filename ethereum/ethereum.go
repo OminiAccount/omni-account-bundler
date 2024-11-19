@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"github.com/OAB/ethereum/contracts/EntryPoint"
 	"github.com/OAB/ethereum/contracts/SimpleAccountFactory"
-	"github.com/OAB/pool"
 	"github.com/OAB/state/types"
 	"github.com/OAB/utils/chains"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -16,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"strings"
-	"time"
 )
 
 type Client struct {
@@ -82,99 +79,6 @@ func NewEthereum(cfg Config) (*Ethereum, error) {
 	}
 
 	return ethereum, nil
-}
-
-func (ether *Ethereum) WatchEntryPointEvent(ctx context.Context, chainId chains.ChainId, fromBlock uint64, ticketChannel chan<- pool.TicketFull) error {
-
-	entryPoint := ether.ChainsClient[chainId].EntryPoint
-	opts := &bind.WatchOpts{
-		Start:   &fromBlock,
-		Context: ctx,
-	}
-	depositTicketAddedChannel := make(chan *EntryPoint.EntryPointDepositTicketAdded)
-	withdrawTicketAddedChannel := make(chan *EntryPoint.EntryPointWithdrawTicketAdded)
-
-	// Encapsulating function to start a subscription
-	subscribe := func() (ethereum.Subscription, ethereum.Subscription, error) {
-		depositTicketSubscription, err := entryPoint.WatchDepositTicketAdded(opts, depositTicketAddedChannel, nil, nil)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		withdrawTicketSubscription, err := entryPoint.WatchWithdrawTicketAdded(opts, withdrawTicketAddedChannel, nil, nil)
-		if err != nil {
-			depositTicketSubscription.Unsubscribe()
-			return nil, nil, err
-		}
-
-		return depositTicketSubscription, withdrawTicketSubscription, nil
-	}
-
-	// Initial Subscription
-	depositTicketSubscription, withdrawTicketSubscription, err := subscribe()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		depositTicketSubscription.Unsubscribe()
-		withdrawTicketSubscription.Unsubscribe()
-	}()
-
-	for {
-		select {
-		case err = <-depositTicketSubscription.Err():
-			ether.logger.Error("Failed to subscribe to depositTicket", "error", err)
-
-			// Re-subscribe
-			depositTicketSubscription.Unsubscribe()
-			withdrawTicketSubscription.Unsubscribe()
-			for {
-				depositTicketSubscription, withdrawTicketSubscription, err = subscribe()
-				if err == nil {
-					break
-				}
-				ether.logger.Error("Retrying subscription after failure", "error", err)
-				time.Sleep(time.Second * 1)
-			}
-		case err = <-withdrawTicketSubscription.Err():
-			ether.logger.Error("Failed to subscribe to withdrawTicket", "error", err)
-
-			depositTicketSubscription.Unsubscribe()
-			withdrawTicketSubscription.Unsubscribe()
-			for {
-				depositTicketSubscription, withdrawTicketSubscription, err = subscribe()
-				if err == nil {
-					break
-				}
-				ether.logger.Error("Retrying subscription after failure", "error", err)
-				time.Sleep(time.Second * 1)
-			}
-		case event1 := <-depositTicketAddedChannel:
-			ether.logger.Debug("Received deposit ticket event", "event", event1)
-			ticket := pool.TicketFull{
-				Ticket: pool.Ticket{
-					User:      event1.User,
-					Amount:    (*hexutil.Big)(event1.Amount),
-					TimeStamp: (*hexutil.Big)(event1.Timestamp),
-				},
-				Type: pool.Deposit,
-			}
-			ticketChannel <- ticket
-		case event2 := <-withdrawTicketAddedChannel:
-			ether.logger.Debug("Received withdraw ticket event", "event", event2)
-			ticket := pool.TicketFull{
-				Ticket: pool.Ticket{
-					User:      event2.User,
-					Amount:    (*hexutil.Big)(event2.Amount),
-					TimeStamp: (*hexutil.Big)(event2.Timestamp),
-				},
-				Type: pool.Withdraw,
-			}
-			ticketChannel <- ticket
-		case <-ctx.Done():
-			return nil
-		}
-	}
 }
 
 func (ether *Ethereum) UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hexutil.Bytes) (*ethereumType.Transaction, error) {

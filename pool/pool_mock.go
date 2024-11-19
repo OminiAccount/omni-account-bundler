@@ -2,9 +2,14 @@ package pool
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+)
+
+import (
+	"github.com/OAB/lib/common/hexutil"
 )
 
 func hexTo(hex string) *hexutil.Big {
@@ -12,44 +17,116 @@ func hexTo(hex string) *hexutil.Big {
 	bigInt, _ = bigInt.SetString(hex[2:], 16)
 	return (*hexutil.Big)(bigInt)
 }
-func (p *Pool) mockPool() {
-	fmt.Println("Mock user op")
 
-	mockOp := SignedUserOperation{
-		UserOperation: &UserOperation{
-			Sender:               common.HexToAddress("0x38bdb2abd66c00cbf05584a9717c1094181a8780"),
-			Nonce:                1,
-			ChainId:              (*hexutil.Big)(big.NewInt(11155111)),
-			InitCode:             common.FromHex(""),
-			CallData:             common.FromHex("0xb61d27f600000000000000000000000001b7ca9d6b8ac943185e107e4be7430e5d90b5a5000000000000000000000000000000000000000000000000002386f26fc1000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000"),
-			CallGasLimit:         0x30d40,
-			VerificationGasLimit: 0x41eb0,
-			PreVerificationGas:   hexTo("0x29810"),
-			MaxFeePerGas:         hexTo("0x6fc23ac00"),
-			MaxPriorityFeePerGas: hexTo("0x77359400"),
-			PaymasterAndData:     common.FromHex(""),
-		},
-		Signature: common.FromHex("0x2a33138b20e431c074197c721ca41d78634484a3c1717cc181d334074c98d44946930a3851026adbe647490524d6c369d2eb5879c2e297b6dd5befe2828a18071c"),
+func signMessage(dataHash []byte) (signature []byte) {
+	privateKey, err := crypto.HexToECDSA("1cb564eaae3cc8d2f4bfbc2b352c114a4de315288155d6f12cfa418aa8929864")
+	if err != nil {
+		fmt.Println("Error generating private key:", err)
+	}
+	signature, err = crypto.Sign(accounts.TextHash(dataHash), privateKey)
+	if err != nil {
+		fmt.Printf("Failed to sign hash typed data: %v\n", err)
 	}
 
-	p.AddUserOp(mockOp)
+	signature[crypto.RecoveryIDOffset] += 27 // Transform yellow paper V from 0/1 to 27/28
 
-	mockOp1 := SignedUserOperation{
-		UserOperation: &UserOperation{
-			Sender:               common.HexToAddress("0x38bdb2abd66c00cbf05584a9717c1094181a8780"),
-			Nonce:                2,
-			ChainId:              (*hexutil.Big)(big.NewInt(11155111)),
-			InitCode:             common.FromHex(""),
-			CallData:             common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
-			CallGasLimit:         0x30d40,
-			VerificationGasLimit: 0x41eb0,
-			PreVerificationGas:   hexTo("0x29810"),
-			MaxFeePerGas:         hexTo("0x6fc23ac00"),
-			MaxPriorityFeePerGas: hexTo("0x77359400"),
-			PaymasterAndData:     common.FromHex(""),
-		},
-		Signature: common.FromHex("0x5df3d9f5bb5565321f674adcb0fd3a93dd940d4d21e059563c08b28d950398154a8c67733aef5da89a289722c4937c446a516d74d1796020907e9423e83e9fe81b"),
+	return signature
+}
+
+func CreateUserOps() []*SignedUserOperation {
+	var sus []*SignedUserOperation
+
+	// userOp for deposit 0.2 ether
+	userOpDeposit := UserOperation{
+		OperationType:          1,
+		OperationValue:         0x2c68af0bb140000,
+		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Nonce:                  1,
+		ChainId:                hexTo("0xaa36a7"),
+		CallData:               common.FromHex("0x"),
+		MainChainGasLimit:      0x30d40,
+		DestChainGasLimit:      0,
+		ZkVerificationGasLimit: 0x41eb0,
+		MainChainGasPrice:      hexTo("0x29810"),
+		DestChainGasPrice:      hexTo("0x0"),
 	}
 
-	p.AddUserOp(mockOp1)
+	{
+		dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
+
+		// Sign
+		signedUserOperation := SignedUserOperation{
+			UserOperation: &userOpDeposit,
+			Signature:     signMessage(dataHash),
+		}
+		// verify signature
+		recoveredAddr := signedUserOperation.RecoverAddress()
+		fmt.Println(recoveredAddr.Hex())
+
+		sus = append(sus, &signedUserOperation)
+	}
+
+	// userOp for withdraw 0.05 ether
+	userOpWithdraw := UserOperation{
+		OperationType:          2,
+		OperationValue:         0xb1a2bc2ec50000,
+		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Nonce:                  2,
+		ChainId:                hexTo("0xaa36a7"),
+		CallData:               common.FromHex("0x"),
+		MainChainGasLimit:      0x30d40,
+		DestChainGasLimit:      0,
+		ZkVerificationGasLimit: 0x41eb0,
+		MainChainGasPrice:      hexTo("0x29810"),
+		DestChainGasPrice:      hexTo("0x0"),
+	}
+
+	{
+		dataHash := userOpWithdraw.CalculateEIP712TypeDataHash()
+
+		// Sign
+		signedUserOperation := SignedUserOperation{
+			UserOperation: &userOpWithdraw,
+			Signature:     signMessage(dataHash),
+		}
+		// verify signature
+		recoveredAddr := signedUserOperation.RecoverAddress()
+		fmt.Println(recoveredAddr.Hex())
+
+		sus = append(sus, &signedUserOperation)
+	}
+
+	for i := 0; i < 62; i++ {
+		// userOp for counter contract
+		userOpCounter := UserOperation{
+			OperationType:          0,
+			Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+			Nonce:                  hexutil.Uint64(3 + i),
+			ChainId:                hexTo("0xaa36a7"),
+			CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
+			MainChainGasLimit:      0x30d40,
+			DestChainGasLimit:      0,
+			ZkVerificationGasLimit: 0x41eb0,
+			MainChainGasPrice:      hexTo("0x29810"),
+			DestChainGasPrice:      hexTo("0x0"),
+		}
+
+		{
+			dataHashCounter := userOpCounter.CalculateEIP712TypeDataHash()
+
+			// Sign
+			signedUserOperationCounter := SignedUserOperation{
+				UserOperation: &userOpCounter,
+				Signature:     signMessage(dataHashCounter),
+			}
+			// verify signature
+			signedUserOperationCounter.RecoverAddress()
+			//fmt.Println(recoveredAddr.Hex())
+
+			sus = append(sus, &signedUserOperationCounter)
+		}
+
+	}
+
+	return sus
 }

@@ -2,83 +2,220 @@ package pool
 
 import (
 	"fmt"
+	"github.com/OAB/lib/common/hexutil"
+	"github.com/OAB/utils/apitypes"
+	"github.com/OAB/utils/packutils"
+	poseidon2 "github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 )
 
-// EIP712Domain represents the domain object for EIP-712
-type EIP712Domain struct {
-	Name              string
-	Version           string
-	ChainId           uint64
-	VerifyingContract common.Address
-}
+const (
+	EIP712DomainName    = "OMNI-ACCOUNT"
+	EIP712DomainVersion = "1.0"
+
+	UserAction     = 0
+	DepositAction  = 1
+	WithdrawAction = 2
+)
 
 type UserOperation struct {
-	Sender               common.Address `json:"sender"`
-	Nonce                hexutil.Uint64 `json:"nonce"`
-	ChainId              *hexutil.Big   `json:"chainId"`
-	InitCode             hexutil.Bytes  `json:"initCode"`
-	CallData             hexutil.Bytes  `json:"callData"`
-	CallGasLimit         hexutil.Uint64 `json:"callGasLimit"`
-	VerificationGasLimit hexutil.Uint64 `json:"verificationGasLimit"`
-	PreVerificationGas   *hexutil.Big   `json:"preVerificationGasLimit"`
-	MaxFeePerGas         *hexutil.Big   `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big   `json:"maxPriorityFeePerGas"`
-	PaymasterAndData     hexutil.Bytes  `json:"paymasterAndData"`
+	OperationType          uint8          `json:"operationType"`
+	OperationValue         hexutil.Uint64 `json:"operationValue"`
+	Sender                 common.Address `json:"sender"`
+	Nonce                  hexutil.Uint64 `json:"nonce"`
+	ChainId                *hexutil.Big   `json:"chainId"`
+	CallData               hexutil.Bytes  `json:"callData"`
+	MainChainGasLimit      hexutil.Uint64 `json:"mainChainGasLimit"`
+	DestChainGasLimit      hexutil.Uint64 `json:"destChainGasLimit"`
+	ZkVerificationGasLimit hexutil.Uint64 `json:"zkVerificationGasLimit"`
+	MainChainGasPrice      *hexutil.Big   `json:"mainChainGasPrice"`
+	DestChainGasPrice      *hexutil.Big   `json:"destChainGasPrice"`
 }
 
 type SignedUserOperation struct {
 	*UserOperation
-	Signature hexutil.Bytes `json:"signature"`
+	Signature hexutil.Bytes  `json:"signature"`
+	Owner     common.Address `json:"owner"`
 }
 
-// Recover the address from the signature
-func recoverAddressFromSignature(signature []byte, messageHash common.Hash) (common.Address, error) {
-	if len(signature) != 65 {
-		return common.Address{}, fmt.Errorf("invalid signature length: expected 65 bytes, got %d", len(signature))
-	}
-
-	r := signature[:32]
-	s := signature[32:64]
-	v := signature[64]
-
-	// Adjust v value for EIP-155 compliance
-	if v < 27 {
-		v += 27
-	}
-
-	// Recover the public key from the signature
-	pubKey, err := crypto.Ecrecover(messageHash.Bytes(), append(r, append(s, v)...))
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	// Get the address from the recovered public key
-	pubKeyECDSA, err := crypto.UnmarshalPubkey(pubKey)
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	recoveredAddr := crypto.PubkeyToAddress(*pubKeyECDSA)
-	return recoveredAddr, nil
-}
-
-func (su *SignedUserOperation) RecoverId() uint8 {
-	v := su.Signature[64]
-	return v
-}
-
-// CalculateGasUsed Todo: Update to contract calculateGasUsed
 func (u *UserOperation) CalculateGasUsed() *big.Int {
 	var totalGas big.Int
-	totalGas.Add(big.NewInt(int64(u.CallGasLimit)), big.NewInt(int64(u.VerificationGasLimit)))
-	totalGas.Add(&totalGas, u.PreVerificationGas.ToInt())
-	var totalGasCoeff big.Int
-	totalGasCoeff.Add(u.MaxFeePerGas.ToInt(), u.MaxPriorityFeePerGas.ToInt())
-	var gasUsed big.Int
-	gasUsed.Mul(&totalGas, &totalGasCoeff)
-	return &gasUsed
+	totalGas.Add(big.NewInt(int64(u.MainChainGasLimit)), big.NewInt(int64(u.ZkVerificationGasLimit)))
+	totalGas.Mul(&totalGas, u.MainChainGasPrice.ToInt())
+	var destGas big.Int
+	destGas.Mul(big.NewInt(int64(u.DestChainGasLimit)), u.DestChainGasPrice.ToInt())
+	totalGas.Add(&totalGas, &destGas)
+	return &totalGas
+}
+
+func (u *UserOperation) IsGasOperation() bool {
+	return u.OperationType == DepositAction || u.OperationType == WithdrawAction
+}
+
+// PackOpInfo the `Nonce` and `ChainId`
+func (u *UserOperation) PackOpInfo() []byte {
+	value, _ := packutils.PackUints(big.NewInt(int64(u.Nonce)), u.ChainId.ToInt())
+	return value
+}
+
+func (u *UserOperation) PackChainGasLimit() []byte {
+	value, _ := packutils.PackUints(big.NewInt(int64(u.MainChainGasLimit)), big.NewInt(int64(u.DestChainGasLimit)))
+	return value
+}
+
+func (u *UserOperation) PackChainGasPrice() []byte {
+	value, _ := packutils.PackUints(u.MainChainGasPrice.ToInt(), u.DestChainGasPrice.ToInt())
+	return value
+}
+
+func (u *UserOperation) PackOperation() []byte {
+	var encodeBytes []byte
+	encodeBytes = append(encodeBytes, u.OperationType)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(u.OperationValue)), 31)...)
+	return encodeBytes
+}
+
+func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
+	domain := apitypes.TypedDataDomain{
+		Name:    EIP712DomainName,
+		Version: EIP712DomainVersion,
+	}
+
+	typedData := apitypes.TypedData{
+		Types: apitypes.Types{
+			"EIP712Domain": []apitypes.Type{
+				{Name: "name", Type: "string"},
+				{Name: "version", Type: "string"},
+			},
+			"UserOperation": []apitypes.Type{
+				{Name: "operation", Type: "bytes32"},
+				{Name: "sender", Type: "address"},
+				{Name: "opInfo", Type: "bytes32"},
+				{Name: "callData", Type: "bytes32"},
+				{Name: "chainGasLimit", Type: "bytes32"},
+				{Name: "zkVerificationGasLimit", Type: "uint256"},
+				{Name: "chainGasPrice", Type: "bytes32"},
+			},
+		},
+		PrimaryType: "UserOperation",
+		Domain:      domain,
+		Message: apitypes.TypedDataMessage{
+			"operation":              hexutil.Encode(u.PackOperation()),
+			"sender":                 u.Sender.String(),
+			"opInfo":                 hexutil.Encode(u.PackOpInfo()),
+			"callData":               crypto.Keccak256Hash(u.CallData).Hex(),
+			"chainGasLimit":          hexutil.Encode(u.PackChainGasLimit()),
+			"zkVerificationGasLimit": u.ZkVerificationGasLimit.String(),
+			"chainGasPrice":          hexutil.Encode(u.PackChainGasPrice()),
+		},
+	}
+
+	if false {
+		// Domain hash
+		domainSeparator, _ := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+		fmt.Println("domainSeparator:", domainSeparator)
+
+		// Primary type hash
+		primaryHash := typedData.TypeHash(typedData.PrimaryType)
+		fmt.Println("primaryHash:", primaryHash)
+
+		// Message Data
+		encodedMessageData, _ := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
+		fmt.Println("encodedMessage:", encodedMessageData)
+		fmt.Println("encodedMessageHash:", crypto.Keccak256Hash(encodedMessageData))
+
+	}
+
+	// Data hash = poseidon(0x1901 + DomainHash + MessageHash(poseidon(PrimaryHash+ContextHash))
+	dataHash, _, err := apitypes.TypedDataAndHash(typedData)
+	if err != nil {
+		fmt.Printf("Failed to hash typed data: %v\n", err)
+	}
+	return dataHash
+}
+
+// RecoverAddress Returns address from the signature
+func (s *SignedUserOperation) RecoverAddress() common.Address {
+	dataHash := s.CalculateEIP712TypeDataHash()
+
+	// 1. Add the prefix
+	prefixedMessage := []byte(fmt.Sprintf("\u0019Ethereum Signed Message:\n%d%s", len(dataHash), dataHash))
+
+	// 2. Hash the message using keccak256 (SHA3)
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(prefixedMessage)
+	messageHash := hash.Sum(nil)
+
+	signature := common.CopyBytes(s.Signature)
+	if len(signature) != crypto.SignatureLength {
+		fmt.Printf("signature must be %d bytes long", crypto.SignatureLength)
+	}
+	if signature[crypto.RecoveryIDOffset] != 27 && signature[crypto.RecoveryIDOffset] != 28 {
+		fmt.Printf("invalid Ethereum signature (V is not 27 or 28)")
+	}
+	signature[crypto.RecoveryIDOffset] -= 27 // Transform yellow paper V from 27/28 to 0/1
+	sigPublicKey, err := crypto.SigToPub(messageHash, signature)
+	if err != nil {
+		fmt.Printf("Failed to recover public key from signature: %v", err)
+	}
+
+	recoveredAddr := crypto.PubkeyToAddress(*sigPublicKey)
+
+	s.Owner = recoveredAddr
+
+	return recoveredAddr
+}
+
+// Encode Returns the bytes value of the EIP712 value + recover address
+func (s *SignedUserOperation) Encode() []byte {
+	var encodeBytes []byte
+	encodeBytes = append(encodeBytes, s.PackOperation()...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(s.Sender.Bytes(), 32)...)
+	encodeBytes = append(encodeBytes, s.PackOpInfo()...)
+	encodeBytes = append(encodeBytes, crypto.Keccak256(s.CallData)...)
+	encodeBytes = append(encodeBytes, s.PackChainGasLimit()...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.ZkVerificationGasLimit)), 32)...)
+	encodeBytes = append(encodeBytes, s.PackChainGasPrice()...)
+	encodeBytes = append(encodeBytes, s.Owner.Bytes()...)
+
+	return encodeBytes
+}
+
+// EncodeEip712Context The first byte represents the number of UserOp (ff)
+// [UserOpsLen,UserOps..]
+// UserOp = [operationType,sender,chainId,callDataLen,callData,(mainChainGasLimit,destChainGasLimit),zkVerificationGasLimit,
+//
+//			 (mainChainGasPrice,destChainGasPrice),signature
+//	]
+//	callData and paymasterAndData are both dynamic bytes,so the field indicating their length is two bytes(ffff) ,
+//	and the other fields are fixed 32 bytes.
+func EncodeEip712Context(sus []*SignedUserOperation) []byte {
+	var encodeBytes []byte
+	encodeBytes = append(encodeBytes, byte(len(sus)))
+	for _, su := range sus {
+		encodeBytes = append(encodeBytes, su.PackOperation()...)
+		encodeBytes = append(encodeBytes, common.LeftPadBytes(su.Sender.Bytes(), 32)...)
+		encodeBytes = append(encodeBytes, su.PackOpInfo()...)
+		encodeBytes = append(encodeBytes, crypto.Keccak256(su.CallData)...)
+		encodeBytes = append(encodeBytes, su.PackChainGasLimit()...)
+		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(su.ZkVerificationGasLimit)), 32)...)
+		encodeBytes = append(encodeBytes, su.PackChainGasPrice()...)
+		encodeBytes = append(encodeBytes, su.Signature...)
+	}
+
+	return encodeBytes
+}
+
+func HashSignedUserOperationV1s(sus []*SignedUserOperation) common.Hash {
+	var encodeBytes []byte
+	for _, su := range sus {
+		encodeBytes = append(encodeBytes, su.Encode()...)
+	}
+
+	hashBytes, _ := poseidon2.HashMessage(encodeBytes)
+
+	return common.BytesToHash(poseidon2.H4ToBytes(hashBytes))
 }

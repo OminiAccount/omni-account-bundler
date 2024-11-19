@@ -8,7 +8,8 @@ import (
 
 type (
 	PoolInterface interface {
-		Context() chan pool.BatchContext
+		AddSignedUserOperation(op *pool.SignedUserOperation)
+		Context() chan *pool.BatchContext
 		Cache()
 	}
 

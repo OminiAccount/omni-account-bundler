@@ -10,28 +10,19 @@ import (
 )
 
 type EthEndpoints struct {
-	pool  types.PoolInterface
 	state types.StateInterface
 }
 
-func NewEthEndpoints(p types.PoolInterface, s types.StateInterface) *EthEndpoints {
-	return &EthEndpoints{p, s}
+func NewEthEndpoints(s types.StateInterface) *EthEndpoints {
+	return &EthEndpoints{s}
 }
 
-func (e *EthEndpoints) SendUserOperation(signedUserOp pool.SignedUserOperation) error {
+func (e *EthEndpoints) SendUserOperation(signedUserOp *pool.SignedUserOperation) error {
 	if len(signedUserOp.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
 	}
-	if len(signedUserOp.InitCode) != 0 {
-		return fmt.Errorf("creation of AA contracts is not supported")
-	}
-	//// check
-	//err := e.state.AddUserOperation(*signedUserOp.UserOperation)
-	//if err != nil {
-	//	return err
-	//}
-	e.pool.AddUserOp(signedUserOp)
-	return nil
+
+	return e.state.AddSignedUserOperation(signedUserOp)
 }
 
 func (e *EthEndpoints) GetBatchProof() (interface{}, error) {
@@ -47,18 +38,19 @@ func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
 }
 
 type AccountInfo struct {
-	Balance *big.Int
-	Nonce   uint64
+	Balance        *big.Int
+	Nonce          uint64
+	UserOperations []*pool.UserOperation
 }
 
-func (e *EthEndpoints) GetAccountInfo(account common.Address, chainId uint64) interface{} {
-	balance, nonce := e.state.GetBalanceAndNonceForAccount(account, chainId)
-	return AccountInfo{
-		Balance: balance,
-		Nonce:   nonce,
+func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint64) (interface{}, error) {
+	balance, nonce, userOps, err := e.state.GetAccountInfo(user, account, chainId)
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (e *EthEndpoints) GetUserOpsForAccount(user, account common.Address) (interface{}, error) {
-	return e.state.GetUserOpsForAccount(user, account)
+	return AccountInfo{
+		Balance:        balance,
+		Nonce:          nonce,
+		UserOperations: userOps,
+	}, nil
 }
