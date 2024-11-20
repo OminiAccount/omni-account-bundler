@@ -6,9 +6,9 @@ import (
 	"github.com/OAB/utils/apitypes"
 	"github.com/OAB/utils/packutils"
 	poseidon2 "github.com/OAB/utils/poseidon"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 )
 
@@ -141,13 +141,7 @@ func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 func (s *SignedUserOperation) RecoverAddress() common.Address {
 	dataHash := s.CalculateEIP712TypeDataHash()
 
-	// 1. Add the prefix
-	prefixedMessage := []byte(fmt.Sprintf("\u0019Ethereum Signed Message:\n%d%s", len(dataHash), dataHash))
-
-	// 2. Hash the message using keccak256 (SHA3)
-	hash := sha3.NewLegacyKeccak256()
-	hash.Write(prefixedMessage)
-	messageHash := hash.Sum(nil)
+	messageHash := accounts.TextHash(dataHash)
 
 	signature := common.CopyBytes(s.Signature)
 	if len(signature) != crypto.SignatureLength {

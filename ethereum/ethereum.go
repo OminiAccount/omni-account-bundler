@@ -55,12 +55,12 @@ func NewEthereum(cfg Config) (*Ethereum, error) {
 
 		entryPoint, err := EntryPoint.NewEntryPoint(network.EntryPoint, wsClient)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to init entryPoint: %w", err)
 		}
 
 		if ethereum.chainId == network.ChainId {
 			if ethereum.AccountFactory, err = SimpleAccountFactory.NewSimpleAccountFactory(cfg.AccountFactory, wsClient); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to init simple account factory: %w", err)
 			}
 		}
 
