@@ -15,6 +15,7 @@ var (
 	SepoliaChain         = ChainInfo{ID: 11155111, Name: "Sepolia"}
 	ArbitrumMainnetChain = ChainInfo{ID: 42161, Name: "Arbitrum Mainnet"}
 	ArbitrumSepoliaChain = ChainInfo{ID: 421614, Name: "Arbitrum Sepolia"}
+	LocalNode            = ChainInfo{ID: 31337, Name: "LocalNode"}
 	// Add more chains as needed...
 )
 
@@ -31,6 +32,7 @@ func init() {
 		SepoliaChain,
 		ArbitrumMainnetChain,
 		ArbitrumSepoliaChain,
+		LocalNode,
 		// Add more chains as needed...
 	}
 

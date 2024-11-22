@@ -46,8 +46,8 @@ func CreateUserOps() []*SignedUserOperation {
 		CallData:               common.FromHex("0x"),
 		MainChainGasLimit:      0x30d40,
 		DestChainGasLimit:      0,
-		ZkVerificationGasLimit: 0x41eb0,
-		MainChainGasPrice:      hexTo("0x29810"),
+		ZkVerificationGasLimit: 0x898,
+		MainChainGasPrice:      hexTo("0x9502f900"),
 		DestChainGasPrice:      hexTo("0x0"),
 	}
 
@@ -76,8 +76,8 @@ func CreateUserOps() []*SignedUserOperation {
 		CallData:               common.FromHex("0x"),
 		MainChainGasLimit:      0x30d40,
 		DestChainGasLimit:      0,
-		ZkVerificationGasLimit: 0x41eb0,
-		MainChainGasPrice:      hexTo("0x29810"),
+		ZkVerificationGasLimit: 0x898,
+		MainChainGasPrice:      hexTo("0x9502f900"),
 		DestChainGasPrice:      hexTo("0x0"),
 	}
 
@@ -106,8 +106,8 @@ func CreateUserOps() []*SignedUserOperation {
 			CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
 			MainChainGasLimit:      0x30d40,
 			DestChainGasLimit:      0,
-			ZkVerificationGasLimit: 0x41eb0,
-			MainChainGasPrice:      hexTo("0x29810"),
+			ZkVerificationGasLimit: 0x898,
+			MainChainGasPrice:      hexTo("0x9502f900"),
 			DestChainGasPrice:      hexTo("0x0"),
 		}
 

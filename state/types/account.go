@@ -5,17 +5,34 @@ import (
 	"fmt"
 	"github.com/OAB/pool"
 	"github.com/ethereum/go-ethereum/common"
+	"maps"
 	"math/big"
 )
 
 const UserHaveAccountsMaxNumber = 1
 
+type Nonce map[uint64]uint64
+
+func (n Nonce) Copy() Nonce {
+	return maps.Clone(n)
+}
+
 type UserAccount map[common.Address]map[common.Address]AccountInfo
 
 type AccountInfo struct {
-	Nonce          map[uint64]uint64
+	Nonce          Nonce
 	Gas            *big.Int
 	UserOperations []*pool.UserOperation
+}
+
+func (info *AccountInfo) deepCopy() *AccountInfo {
+	obj := &AccountInfo{
+		Nonce:          info.Nonce.Copy(),
+		Gas:            new(big.Int).Set(info.Gas),
+		UserOperations: info.UserOperations,
+	}
+
+	return obj
 }
 
 func (info *AccountInfo) increaseNonce(chainId uint64) {
@@ -94,25 +111,39 @@ func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperat
 		return err
 	}
 
+	// Create a snapshot, save the original state
+	originalAccountInfo := accountInfo.deepCopy()
+
+	var opErr error
+
 	// deposit/withdraw
 	if signedUserOp.UserOperation.IsGasOperation() {
 		if success := accountInfo.gasOperation(signedUserOp.UserOperation); success == false {
-			return fmt.Errorf("deposit or withdraw operation failed for user:%s", signedUserOp.Owner)
+			opErr = fmt.Errorf("deposit or withdraw operation failed for user:%s", signedUserOp.Owner)
 		}
 	}
 
 	// check gas
-	if !accountInfo.remainingGas(signedUserOp.UserOperation) {
-		return fmt.Errorf("insufficient gas balance")
+	if opErr == nil && !accountInfo.remainingGas(signedUserOp.UserOperation) {
+		opErr = fmt.Errorf("insufficient gas balance")
 	}
 
 	// nonce ++
-	accountInfo.increaseNonce(signedUserOp.ChainId.Uint64())
-	expectNonce := accountInfo.Nonce[signedUserOp.ChainId.Uint64()]
-	if expectNonce != signedUserOp.Nonce.Uint64() {
-		return fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", signedUserOp.Owner, expectNonce, signedUserOp.Nonce.Uint64())
+	if opErr == nil {
+		accountInfo.increaseNonce(signedUserOp.ChainId.Uint64())
+		expectNonce := accountInfo.Nonce[signedUserOp.ChainId.Uint64()]
+		if expectNonce != signedUserOp.Nonce.Uint64() {
+			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", signedUserOp.Owner, expectNonce, signedUserOp.Nonce.Uint64())
+		}
 	}
-	accountInfo.addUserOperations(signedUserOp.UserOperation)
+
+	if opErr == nil {
+		accountInfo.addUserOperations(signedUserOp.UserOperation)
+	} else {
+		// If an error occurs, restore the original state
+		(*u)[signedUserOp.Owner][signedUserOp.Sender] = *originalAccountInfo
+		return opErr
+	}
 
 	// recopy
 	(*u)[signedUserOp.Owner][signedUserOp.Sender] = *accountInfo

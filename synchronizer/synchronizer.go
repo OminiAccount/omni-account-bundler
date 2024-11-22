@@ -102,7 +102,7 @@ func (s *Synchronizer) syncAccountCreated() {
 
 	go func(ch chan stateTypes.AccountMapping) {
 		if err := s.ether.WatchAAFactoryEvent(s.ctx, 0, ch); err != nil {
-			s.logger.Error("Failed to start event listener", "error", err)
+			s.logger.Error("Failed to start aa factory listener", "error", err)
 		}
 	}(ch)
 
@@ -110,8 +110,8 @@ func (s *Synchronizer) syncAccountCreated() {
 		// get all events
 		time.Sleep(3 * time.Second)
 		mappingInsert := stateTypes.AccountMapping{ //01b7cA9d6B8Ac943185E107e4BE7430e5D90B5A5
-			User:    common.HexToAddress("a54753229AD35abC403B53E629A28820C8041eaA"),
-			Account: common.HexToAddress("d09d22e15B8c387a023811E5C1021b441B8F0E5a"),
+			User:    common.HexToAddress("a0Ee7A142d267C1f36714E4a8F75612F20a79720"),
+			Account: common.HexToAddress("BF9bb0ED00C1d6a1D95A4cbcac9897eb33247580"),
 		}
 		ch <- mappingInsert
 	}()
