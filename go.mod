@@ -11,7 +11,6 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.4
 	github.com/holiman/uint256 v1.3.1
 	github.com/iden3/go-iden3-crypto v0.0.17
-	github.com/ledgerwatch/erigon-lib v1.0.0
 	github.com/ledgerwatch/log/v3 v3.9.0
 	github.com/prometheus/client_golang v1.12.0
 	github.com/prometheus/client_model v0.2.1-0.20210607210712-147c58e9608a

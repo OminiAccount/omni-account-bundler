@@ -1,0 +1,25 @@
+version: "3.5"
+networks:
+  default:
+    name: omni-account
+
+services:
+  oa-bundler:
+    container_name: oa-bundler
+    image: orbiter/oa-bundler:v0.0.1
+#    restart: unless-stopped
+    ports:
+      - 8100:8100
+    volumes:
+      - ./develop.toml:/app/develop.toml
+      - ./sender.keystore:/app/sender.keystore
+      - ./spv_level_db:/spv_level_db
+    command:
+      - "/bin/sh"
+      - "-c"
+      - "/app/oa-bundler processor --config /app/develop.toml"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

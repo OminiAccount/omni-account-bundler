@@ -3,3 +3,5 @@
 !example*.toml
 
 cmd/cmd*
+
+*.keystore
