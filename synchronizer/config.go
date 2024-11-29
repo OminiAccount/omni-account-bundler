@@ -1,7 +1,7 @@
 package synchronizer
 
-import "github.com/OAB/ethereum"
+import "github.com/OAB/etherman"
 
 type Config struct {
-	EthereumCfg ethereum.Config
+	EthereumCfg etherman.Config
 }

@@ -7,9 +7,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"maps"
 	"math/big"
+	"sync"
 )
 
 const UserHaveAccountsMaxNumber = 1
+
+var Lock sync.RWMutex
 
 type Nonce map[uint64]uint64
 
@@ -79,6 +82,9 @@ func NewUserAccount() *UserAccount {
 }
 
 func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
+	Lock.Lock()
+	defer Lock.Unlock()
+
 	if (*u)[mapping.User] == nil {
 		(*u)[mapping.User] = make(map[common.Address]AccountInfo)
 	}
@@ -97,6 +103,9 @@ func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
 }
 
 func (u *UserAccount) GetAccount(user, account common.Address) (*AccountInfo, error) {
+	Lock.RLock()
+	defer Lock.RUnlock()
+
 	accountInfo, exists := (*u)[user][account]
 	if !exists {
 		return nil, fmt.Errorf("user:%s does not exist in this account:%s", user, account)
@@ -111,6 +120,8 @@ func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperat
 		return err
 	}
 
+	Lock.Lock()
+	defer Lock.Unlock()
 	// Create a snapshot, save the original state
 	originalAccountInfo := accountInfo.deepCopy()
 
@@ -152,6 +163,9 @@ func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperat
 
 // GetAccountsForUser Iterate and print all account information for a given user
 func (u *UserAccount) GetAccountsForUser(user common.Address) *[]common.Address {
+	Lock.RLock()
+	defer Lock.RUnlock()
+
 	accountsInfo, exists := (*u)[user]
 	if !exists {
 		return nil

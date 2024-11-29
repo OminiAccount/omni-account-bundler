@@ -2,7 +2,7 @@ package config
 
 import (
 	"github.com/BurntSushi/toml"
-	"github.com/OAB/ethereum"
+	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc/rpcs"
 	"github.com/OAB/pool"
 	_ "github.com/spf13/viper"
@@ -11,7 +11,7 @@ import (
 
 // Config represents the `env.toml` file used to configure the processor
 type Config struct {
-	Ethereum ethereum.Config `toml:"ethereum"`
+	Ethereum etherman.Config `toml:"ethereum"`
 	DB       DBConfig        `toml:"db"`
 	JsonRpc  rpcs.RpcsConfig `toml:"jsonrpc"`
 	Instant  InstantConfig

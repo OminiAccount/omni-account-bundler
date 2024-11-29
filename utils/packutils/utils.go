@@ -18,6 +18,13 @@ func Uint64ToBytes(num uint64) []byte {
 	return buf
 }
 
+func BytesToUint64(num []byte) uint64 {
+	if len(num) < 8 {
+		panic("byte slice is too short to convert to uint64")
+	}
+	return binary.BigEndian.Uint64(num[:8])
+}
+
 // PackUints packs two uint128 values (represented by *big.Int) into a 32-byte array.
 func PackUints(high128, low128 *big.Int) ([]byte, error) {
 	if high128.BitLen() > 128 || low128.BitLen() > 128 {

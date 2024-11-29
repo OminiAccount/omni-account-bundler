@@ -33,6 +33,13 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 	return pool
 }
 
+func (p *Pool) AddTicket(ticket *TicketFull) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.logger.Info("Add a new ticket", "ticket", ticket)
+	p.storage.addTicket(ticket)
+}
+
 func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -46,11 +53,11 @@ func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 func (p *Pool) CheckFlush() {
 	// If the flushInterval is not 0, check both maxOps and time interval
 	if p.cfg.flushInterval != 0 {
-		if uint64(len(p.storage.userOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
+		if uint64(len(p.storage.UserOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
 			p.Flush()
 		}
 	} else {
-		if uint64(len(p.storage.userOps)) >= p.cfg.maxOps {
+		if uint64(len(p.storage.UserOps)) >= p.cfg.maxOps {
 			p.Flush()
 		}
 	}

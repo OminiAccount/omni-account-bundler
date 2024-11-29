@@ -11,32 +11,42 @@ var (
 )
 
 type Storage struct {
-	userOps []*SignedUserOperation
+	UserOps []*SignedUserOperation
+	Tickets []*TicketFull
 
 	db ethdb.Database
 }
 
 func NewStorage(db ethdb.Database) *Storage {
 	return &Storage{
-		userOps: []*SignedUserOperation{},
+		UserOps: []*SignedUserOperation{},
+		Tickets: []*TicketFull{},
 		db:      db,
 	}
 }
 
+func (s *Storage) addTicket(ticket *TicketFull) {
+	s.Tickets = append(s.Tickets, ticket)
+}
+
+func (s *Storage) getTickets() []*TicketFull {
+	return s.Tickets
+}
+
 func (s *Storage) addUserOp(userOp *SignedUserOperation) {
-	s.userOps = append(s.userOps, userOp)
+	s.UserOps = append(s.UserOps, userOp)
 }
 
 func (s *Storage) getUserOps() []*SignedUserOperation {
-	return s.userOps
+	return s.UserOps
 }
 
 func (s *Storage) empty() {
-	s.userOps = []*SignedUserOperation{}
+	s.UserOps = []*SignedUserOperation{}
 }
 
 func (s *Storage) cacheUserOps() error {
-	data, err := msgpack.MarshalStruct(s.userOps)
+	data, err := msgpack.MarshalStruct(s)
 	if err != nil {
 		return err
 	}
@@ -59,12 +69,14 @@ func (s *Storage) loadUserOps() error {
 			return err
 		}
 
-		decodeSigUserOps, err := msgpack.UnmarshalStruct[[]*SignedUserOperation](userOpsData)
+		decodeSigUserOps, err := msgpack.UnmarshalStruct[Storage](userOpsData)
 		if err != nil {
 			return err
 		}
-		s.userOps = decodeSigUserOps
-		fmt.Println("load cache userOps length ", len(s.userOps))
+		s.UserOps = decodeSigUserOps.UserOps
+		s.Tickets = decodeSigUserOps.Tickets
+
+		fmt.Println("load cache userOps length ", len(s.UserOps))
 		//s.userOps = []SignedUserOperation{}
 	}
 	return nil

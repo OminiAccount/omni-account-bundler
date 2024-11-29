@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/OAB/config"
 	"github.com/OAB/database/leveldb"
-	"github.com/OAB/ethereum"
+	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
@@ -20,7 +20,7 @@ type Processor struct {
 
 	pool         *pool.Pool
 	server       *jsonrpc.Server
-	ethereum     *ethereum.Ethereum
+	ethereum     *etherman.EtherMan
 	synchronizer *synchronizer.Synchronizer
 	state        *state.State
 }
@@ -32,7 +32,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	ctx := context.Background()
 
 	// Connect to levelDB
-	levelDBDir, err := filepath.Abs("../../spv_level_db")
+	levelDBDir, err := filepath.Abs("../../db")
 	if _, err = utils.PathExists(levelDBDir); err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	log.Info("Pool successfully initialized")
 
 	// Ethereum
-	ethereum, err := ethereum.NewEthereum(cfg.Ethereum)
+	ethereum, err := etherman.NewEthereum(cfg.Ethereum, levelDB)
 	if err != nil {
 		return nil, err
 	}
@@ -57,20 +57,20 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, err := state.NewState(stateConfig, poolInstance, ethereum)
+	st, err := state.NewState(stateConfig, poolInstance, ethereum)
 	if err != nil {
 		return nil, err
 	}
 
 	// Synchronizer
-	synchronizer, err := synchronizer.NewSynchronizer(ethereum, state, synchronizer.Config{EthereumCfg: cfg.Ethereum})
+	sync, err := synchronizer.NewSynchronizer(poolInstance, ethereum, st, levelDB)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Synchronizer successfully initialized")
 
 	// jsonrpc
-	server := createJSONRPCServer(cfg.JsonRpc, poolInstance, state)
+	server := createJSONRPCServer(cfg.JsonRpc, poolInstance, st)
 	log.Info("JSONRPCServer successfully initialized")
 
 	processor = &Processor{
@@ -78,8 +78,8 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 		cfg:          cfg,
 		server:       server,
 		ethereum:     ethereum,
-		synchronizer: synchronizer,
-		state:        state,
+		synchronizer: sync,
+		state:        st,
 	}
 
 	return processor, nil

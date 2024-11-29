@@ -1,34 +1,22 @@
-package ethereum
+package etherman
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"os"
 	"path/filepath"
 )
 
-// getAuthByAddress tries to get an authorization from the authorizations map
-func (ether *Ethereum) getAuthByAddress(addr common.Address) (bind.TransactOpts, error) {
-	auth, found := ether.auth[addr]
-	if !found {
-		return bind.TransactOpts{}, fmt.Errorf("not found %s", addr.Hex())
-	}
-	return auth, nil
-}
-
 // LoadAuthFromKeyStore loads an authorization from a key store file
-func (ether *Ethereum) LoadAuthFromKeyStore(path, password string, chainID uint64) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {
+func (ether *EtherMan) LoadAuthFromKeyStore(path, password string, chainID uint64) (*bind.TransactOpts, *ecdsa.PrivateKey, error) {
 	auth, pk, err := newAuthFromKeystore(path, password, chainID)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ether.logger.Info("loaded authorization for address", "address", auth.From.String())
-	ether.auth[auth.From] = auth
 	return &auth, pk, nil
 }
 

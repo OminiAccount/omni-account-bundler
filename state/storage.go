@@ -21,6 +21,9 @@ func NewStorage(db ethdb.Database) *Storage {
 }
 
 func (s *Storage) cache() error {
+	types.Lock.RLock()
+	defer types.Lock.RUnlock()
+
 	data, err := msgpack.MarshalStruct(s)
 	if err != nil {
 		return err

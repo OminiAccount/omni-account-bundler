@@ -1,4 +1,4 @@
-package ethereum
+package etherman
 
 import (
 	"fmt"
@@ -6,9 +6,7 @@ import (
 )
 
 type Config struct {
-	Networks       []Network            `toml:"networks"`
-	PrivateKeys    []KeystoreFileConfig `toml:"private_keys"`
-	AccountFactory common.Address       `toml:"account-factory"`
+	Networks []Network `toml:"networks"`
 }
 
 // KeystoreFileConfig has all the information needed to load a private key from a key store file
@@ -22,9 +20,12 @@ type KeystoreFileConfig struct {
 
 // Network configures the network's chainId, rpc and contract's address
 type Network struct {
-	ChainId    uint64         `toml:"chain-id"`
-	Rpc        string         `toml:"rpc"`
-	EntryPoint common.Address `toml:"entry-point"`
+	ChainId        uint64             `toml:"chain-id"`
+	Rpc            string             `toml:"rpc"`
+	EntryPoint     common.Address     `toml:"entry-point"`
+	AccountFactory common.Address     `toml:"account-factory"`
+	PrivateKeys    KeystoreFileConfig `toml:"private_keys"`
+	GenBlockNumber uint64             `toml:"gen-block"`
 }
 
 func (n *Network) UnmarshalTOML(data interface{}) error {

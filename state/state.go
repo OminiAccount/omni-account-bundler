@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/OAB/pool"
 	"github.com/OAB/state/types"
+	"github.com/OAB/utils/db"
 	"github.com/OAB/utils/merkletree"
 	"github.com/OAB/utils/queue"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,14 +21,12 @@ type State struct {
 
 	pool     PoolInterface
 	ethereum EthereumInterface
+	storage  *Storage
+	logger   log.Logger
+	tree     *merkletree.SMT
 
-	tree        *merkletree.SMT
 	proofQueue  *queue.ConcurrentQueue[Batch]
 	provenQueue *queue.ConcurrentQueue[ProofResult]
-
-	storage *Storage
-
-	logger log.Logger
 }
 
 func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
@@ -38,7 +37,7 @@ func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*Stat
 		cancel:      cancel,
 		pool:        pool,
 		ethereum:    ethereum,
-		tree:        merkletree.NewSMT(nil, false),
+		tree:        merkletree.NewSMT(db.NewMemDb(cfg.LevelDB),false),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
 		storage:     NewStorage(cfg.LevelDB),
@@ -52,18 +51,14 @@ func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*Stat
 }
 
 func (s *State) Start() {
-	//go func() {
-	//	time.Sleep(10 * time.Second)
-	//	sus := CreateUserOps()
-	//	for _, operation := range sus {
-	//		err := s.AddSignedUserOperation(operation)
-	//		if err != nil {
-	//			fmt.Println("err: ", err)
-	//		}
-	//	}
-	//}()
 	go s.ProcessBatch()
 	go s.ExecuteBatch()
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			s.Persistence()
+		}
+	}()
 }
 
 func (s *State) Stop() {
@@ -94,7 +89,7 @@ func (s *State) ProcessBatch() {
 }
 
 func (s *State) processBatch(batchContext *pool.BatchContext) error {
-	batch, err := NewBatch(1)
+	batch, err := NewBatch(s.storage.BatchNumber+1)
 	if err != nil {
 		return err
 	}
@@ -168,6 +163,7 @@ func (s *State) processBatch(batchContext *pool.BatchContext) error {
 
 	// Set new state root
 	batch.SetNewStateRoot(common.BigToHash(s.tree.LastRoot()))
+	s.proofQueue.Enqueue(*batch)
 	s.logger.Info("Successfully sealing a batch", "number", batch.NewNumBatch, "stateRoot", batch.NewStateRoot.Hex())
 
 	return nil
@@ -234,41 +230,22 @@ func (s *State) GetAccountInfo(user, account common.Address, chainId uint64) (*b
 }
 
 func (s *State) Persistence() {
-	//s.logger.Info("Cache StateContext info into disk")
-	//if err := s.storage.cache(); err != nil {
-	//	s.logger.Error("Cache StateContext info into disk error", "error", err)
-	//}
-	//if err := s.storage.cacheSmt(s.tree); err != nil {
-	//	s.logger.Error("Cache Smt into disk error", "error", err)
-	//}
+	s.logger.Info("Cache StateContext info into disk")
+	if err := s.storage.cache(); err != nil {
+		s.logger.Error("Cache StateContext info into disk error", "error", err)
+	}
+	if err := s.tree.Db.Cache(); err != nil {
+		s.logger.Error("Cache Smt into disk error", "error", err)
+	}
 }
 
 func (s *State) LoadCache() {
-	//s.logger.Info("Load StateContext info from disk")
-	//if err := s.storage.loadCache(); err != nil {
-	//	s.logger.Error("Load StateContext info from disk error", "error", err)
-	//}
-	//tree, err := s.storage.loadCacheSmt()
-	//if err != nil {
-	//	s.logger.Error("Load Smt info from disk error", "error", err)
-	//}
-	//if tree != nil {
-	//	s.tree = tree
-	//	if true {
-	//		diff := s.storage.StateProof[0]
-	//		if err = s.tree.RollbackMerkleTree(*diff); err != nil {
-	//			s.logger.Error("Failed to rollback smt", "error", err)
-	//		} else {
-	//			if s.storage.BatchNumber != 0 {
-	//				s.storage.BatchNumber--
-	//				s.logger.Info("Rollback smt success")
-	//			} else {
-	//				s.storage.BatchNumber = 0
-	//			}
-	//
-	//		}
-	//	}
-	//	s.logger.Info("Load smt success", "number", s.storage.BatchNumber, "root", s.tree.GetRoot().String())
-	//}
-
+	s.logger.Info("Load StateContext info from disk")
+	if err := s.storage.loadCache(); err != nil {
+		s.logger.Error("Load StateContext info from disk error", "error", err)
+	}
+	err := s.tree.Db.LoadCache()
+	if err != nil {
+		s.logger.Error("Load Smt info from disk error", "error", err)
+	}
 }

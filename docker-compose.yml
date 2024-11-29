@@ -7,13 +7,13 @@ services:
   oa-bundler:
     container_name: oa-bundler
     image: orbiter/oa-bundler:v0.0.1
-#    restart: unless-stopped
+    restart: unless-stopped
     ports:
       - 8100:8100
     volumes:
       - ./develop.toml:/app/develop.toml
       - ./sender.keystore:/app/sender.keystore
-      - ./spv_level_db:/spv_level_db
+      - ./db:/db
     command:
       - "/bin/sh"
       - "-c"

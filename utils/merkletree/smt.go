@@ -10,11 +10,9 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"sync"
-
-	"github.com/OAB/utils/db"
 )
 
-type DB interface {
+type MemDB interface {
 	Insert(key merkletreeutils.NodeKey, value merkletreeutils.NodeValue12) error
 	InsertAccountValue(key merkletreeutils.NodeKey, value merkletreeutils.NodeValue8) error
 	InsertKeySource(key merkletreeutils.NodeKey, value []byte) error
@@ -29,6 +27,8 @@ type DB interface {
 	CommitBatch() error
 	OpenBatch(quitCh <-chan struct{})
 	RollbackBatch()
+	Cache() error
+	LoadCache() error
 	RoDB
 }
 
@@ -43,14 +43,14 @@ type RoDB interface {
 }
 
 type DebuggableDB interface {
-	DB
+	MemDB
 	PrintDb()
 	GetDb() map[string][]string
 }
 
 type SMT struct {
 	noSaveOnInsert bool
-	Db             DB
+	Db             MemDB
 	*RoSMT
 }
 
@@ -64,11 +64,7 @@ type SMTResponse struct {
 	Mode          string
 }
 
-func NewSMT(database DB, noSaveOnInsert bool) *SMT {
-	if database == nil {
-		database = db.NewMemDb()
-	}
-
+func NewSMT(database MemDB, noSaveOnInsert bool) *SMT {
 	return &SMT{
 		noSaveOnInsert: noSaveOnInsert,
 		Db:             database,
@@ -77,10 +73,6 @@ func NewSMT(database DB, noSaveOnInsert bool) *SMT {
 }
 
 func NewRoSMT(database RoDB) *RoSMT {
-	if database == nil {
-		database = db.NewMemDb()
-	}
-
 	return &RoSMT{
 		DbRo: database,
 	}

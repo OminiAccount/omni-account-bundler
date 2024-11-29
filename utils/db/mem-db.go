@@ -3,10 +3,16 @@ package db
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/OAB/utils/msgpack"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
 	"sync"
 
 	"github.com/OAB/utils/merkletreeutils"
+)
+
+var (
+	smtKey = []byte("SmtKey")
 )
 
 type MemDb struct {
@@ -19,9 +25,10 @@ type MemDb struct {
 	Depth       uint8
 
 	lock sync.RWMutex
+	db   ethdb.Database
 }
 
-func NewMemDb() *MemDb {
+func NewMemDb(ethDb ethdb.Database) *MemDb {
 	return &MemDb{
 		Db:          make(map[string][]string),
 		DbAccVal:    make(map[string][]string),
@@ -30,6 +37,7 @@ func NewMemDb() *MemDb {
 		DbCode:      make(map[string][]byte),
 		LastRoot:    big.NewInt(0),
 		Depth:       0,
+		db:          ethDb,
 	}
 }
 
@@ -279,4 +287,46 @@ func (m *MemDb) GetDb() map[string][]string {
 	defer m.lock.RUnlock()
 
 	return m.Db
+}
+
+func (m *MemDb) Cache() error {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	data, err := msgpack.MarshalStruct(m)
+	if err != nil {
+		return err
+	}
+
+	if err = m.db.Put(smtKey, data); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *MemDb) LoadCache() error {
+	has, err := m.db.Has(smtKey)
+	if err != nil {
+		return err
+	}
+	if has {
+		data, err := m.db.Get(smtKey)
+		if err != nil {
+			return err
+		}
+
+		decodeData, err := msgpack.UnmarshalStruct[MemDb](data)
+		if err != nil {
+			return err
+		}
+		m.Db = decodeData.Db
+		m.DbAccVal = decodeData.DbAccVal
+		m.DbCode = decodeData.DbCode
+		m.DbHashKey = decodeData.DbHashKey
+		m.DbKeySource = decodeData.DbKeySource
+		m.LastRoot = decodeData.LastRoot
+		m.Depth = decodeData.Depth
+	}
+
+	return nil
 }
