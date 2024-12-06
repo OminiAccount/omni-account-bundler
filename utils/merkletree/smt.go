@@ -1,13 +1,13 @@
 package merkletree
 
 import (
+	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletreeutils"
 	"math/big"
 
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"sync"
 )
@@ -546,9 +546,9 @@ func (s *RoSMT) PrintTree() {
 		data := debugDB.GetDb()
 		str, err := json.Marshal(data)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err)
 		}
-		fmt.Println(string(str))
+		log.Info(string(str))
 	}
 }
 
@@ -628,7 +628,7 @@ func (s *RoSMT) traverse(ctx context.Context, node *big.Int, action TraverseActi
 		childPrefix[len(prefix)] = byte(i)
 		err = s.traverse(ctx, child.ToBigInt(), action, childPrefix)
 		if err != nil {
-			fmt.Println(err)
+			log.Error(err)
 			return err
 		}
 	}

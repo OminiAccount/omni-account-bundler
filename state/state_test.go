@@ -2,16 +2,98 @@ package state
 
 import (
 	"fmt"
+	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+	"testing"
 )
 
-import (
-	"github.com/OAB/lib/common/hexutil"
-)
+func TestEncodeCircuitInput(t *testing.T) {
+	userOpDeposit := pool.UserOperation{
+		OperationType:          1,
+		OperationValue:         100,
+		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Nonce:                  1,
+		ChainId:                hexTo("0xaa36a7"),
+		CallData:               common.FromHex("0x"),
+		MainChainGasLimit:      0x30d40,
+		DestChainGasLimit:      0,
+		ZkVerificationGasLimit: 0x898,
+		MainChainGasPrice:      hexTo("0x9502f900"),
+		DestChainGasPrice:      hexTo("0x0"),
+	}
+	t.Logf("%+v", userOpDeposit)
+	dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
+	signedUserOperation := pool.SignedUserOperation{
+		UserOperation: &userOpDeposit,
+		Signature:     signMessage(dataHash),
+	}
+	t.Logf("%+v", signedUserOperation)
+	var sus []*pool.SignedUserOperation
+	sus = append(sus, &signedUserOperation)
+	by := encodeCircuitInput(sus)
+	t.Log(by)
+}
+
+func TestDecodeCircuitInput(t *testing.T) {
+	userOpDeposit := pool.UserOperation{
+		OperationType:          1,
+		OperationValue:         100,
+		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Nonce:                  1200,
+		ChainId:                hexTo("0xaa36a7"),
+		CallData:               common.FromHex("0x"),
+		MainChainGasLimit:      0x30d40,
+		DestChainGasLimit:      0x30,
+		ZkVerificationGasLimit: 0x898,
+		MainChainGasPrice:      hexTo("0x9502f900"),
+		DestChainGasPrice:      hexTo("0x90"),
+	}
+	dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
+	signedUserOperation := pool.SignedUserOperation{
+		UserOperation: &userOpDeposit,
+		Signature:     signMessage(dataHash),
+	}
+	t.Log(common.Bytes2Hex(signedUserOperation.Signature))
+	t.Logf("%+v", signedUserOperation.UserOperation)
+	var sus []*pool.SignedUserOperation
+	sus = append(sus, &signedUserOperation)
+
+	userOpDeposit2 := pool.UserOperation{
+		OperationType:          2,
+		OperationValue:         222,
+		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Nonce:                  1500,
+		ChainId:                hexTo("0xaa36a7"),
+		CallData:               common.FromHex("0x"),
+		MainChainGasLimit:      0x20d4,
+		DestChainGasLimit:      0x130,
+		ZkVerificationGasLimit: 0x89,
+		MainChainGasPrice:      hexTo("0x9502f900"),
+		DestChainGasPrice:      hexTo("0x190"),
+	}
+	dataHash2 := userOpDeposit2.CalculateEIP712TypeDataHash()
+	signedUserOperation2 := pool.SignedUserOperation{
+		UserOperation: &userOpDeposit2,
+		Signature:     signMessage(dataHash2),
+	}
+	t.Log(common.Bytes2Hex(signedUserOperation2.Signature))
+	t.Logf("%+v", signedUserOperation2.UserOperation)
+	sus = append(sus, &signedUserOperation2)
+
+	by := encodeCircuitInput(sus)
+	sus = decodeCircuitInput(by)
+	newUo := sus[0]
+	t.Log(common.Bytes2Hex(newUo.Signature))
+	t.Logf("%+v", newUo.UserOperation)
+
+	newUo = sus[1]
+	t.Log(common.Bytes2Hex(newUo.Signature))
+	t.Logf("%+v", newUo.UserOperation)
+}
 
 func hexTo(hex string) *hexutil.Big {
 	bigInt := new(big.Int)

@@ -2,6 +2,7 @@ package etherman
 
 import (
 	"crypto/ecdsa"
+	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"math/big"
@@ -16,7 +17,7 @@ func (ether *EtherMan) LoadAuthFromKeyStore(path, password string, chainID uint6
 		return nil, nil, err
 	}
 
-	ether.logger.Info("loaded authorization for address", "address", auth.From.String())
+	log.Infof("loaded authorization for address: %s", auth.From.String())
 	return &auth, pk, nil
 }
 

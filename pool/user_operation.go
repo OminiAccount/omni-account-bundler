@@ -2,8 +2,10 @@ package pool
 
 import (
 	"fmt"
+	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/utils/apitypes"
+	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/packutils"
 	poseidon2 "github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -39,6 +41,7 @@ type SignedUserOperation struct {
 	*UserOperation
 	Signature hexutil.Bytes  `json:"signature"`
 	Owner     common.Address `json:"owner"`
+	Did       string         `json:"did"`
 }
 
 func (u *UserOperation) CalculateGasUsed() *big.Int {
@@ -116,23 +119,23 @@ func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 	if false {
 		// Domain hash
 		domainSeparator, _ := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-		fmt.Println("domainSeparator:", domainSeparator)
+		log.Info("domainSeparator:", domainSeparator)
 
 		// Primary type hash
 		primaryHash := typedData.TypeHash(typedData.PrimaryType)
-		fmt.Println("primaryHash:", primaryHash)
+		log.Info("primaryHash:", primaryHash)
 
 		// Message Data
 		encodedMessageData, _ := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
-		fmt.Println("encodedMessage:", encodedMessageData)
-		fmt.Println("encodedMessageHash:", crypto.Keccak256Hash(encodedMessageData))
+		log.Info("encodedMessage:", encodedMessageData)
+		log.Info("encodedMessageHash:", crypto.Keccak256Hash(encodedMessageData))
 
 	}
 
 	// Data hash = poseidon(0x1901 + DomainHash + MessageHash(poseidon(PrimaryHash+ContextHash))
 	dataHash, _, err := apitypes.TypedDataAndHash(typedData)
 	if err != nil {
-		fmt.Printf("Failed to hash typed data: %v\n", err)
+		log.Errorf("Failed to hash typed data: %v", err)
 	}
 	return dataHash
 }
@@ -212,4 +215,21 @@ func HashSignedUserOperationV1s(sus []*SignedUserOperation) common.Hash {
 	hashBytes, _ := poseidon2.HashMessage(encodeBytes)
 
 	return common.BytesToHash(poseidon2.H4ToBytes(hashBytes))
+}
+
+func (s *SignedUserOperation) ToEntryPointOp() EntryPoint.PackedUserOperation {
+	return EntryPoint.PackedUserOperation{
+		OperationType:          s.OperationType,
+		OperationValue:         big.NewInt(0).SetUint64(uint64(s.OperationValue)),
+		Sender:                 s.Sender,
+		Nonce:                  uint64(s.Nonce),
+		ChainId:                s.ChainId.Uint64(),
+		CallData:               s.CallData,
+		MainChainGasLimit:      big.NewInt(0).SetUint64(uint64(s.MainChainGasLimit)),
+		MainChainGasPrice:      s.MainChainGasPrice.ToInt(),
+		DestChainGasLimit:      big.NewInt(0).SetUint64(uint64(s.DestChainGasLimit)),
+		DestChainGasPrice:      s.DestChainGasPrice.ToInt(),
+		ZkVerificationGasLimit: big.NewInt(0).SetUint64(uint64(s.ZkVerificationGasLimit)),
+		Owner:                  s.Owner,
+	}
 }

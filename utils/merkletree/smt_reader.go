@@ -3,9 +3,9 @@ package merkletree
 import (
 	"bytes"
 	"context"
+	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletreeutils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/holiman/uint256"
 )
 

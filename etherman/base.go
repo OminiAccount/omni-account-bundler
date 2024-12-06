@@ -54,6 +54,7 @@ type AccountCreateData struct {
 }
 
 type DepositData struct {
+	Did     string
 	Account common.Address
 	Amount  *big.Int
 }

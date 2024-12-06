@@ -1,19 +1,25 @@
 package state
 
 import (
+	"github.com/OAB/etherman/contracts/EntryPoint"
+	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 type (
 	PoolInterface interface {
+		AddTicket(ticket *pool.TicketFull)
+		GetTicket(string) *pool.TicketFull
 		AddSignedUserOperation(op *pool.SignedUserOperation)
-		Context() chan *pool.BatchContext
-		Cache()
+		BatchContext() chan *pool.BatchContext
+		Cache() error
+		LoadCache()
 	}
 
 	EthereumInterface interface {
-		UpdateEntryPointRoot(proof hexutil.Bytes, pubicValues hexutil.Bytes) (*types.Transaction, error)
+		EstimateGas(uint64, *big.Int, []byte) (*big.Int, error)
+		UpdateEntryPointRoot(hexutil.Bytes, []EntryPoint.IEntryPointBatchData, EntryPoint.IEntryPointChainsExecuteInfo) (common.Hash, error)
 	}
 )

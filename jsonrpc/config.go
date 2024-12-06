@@ -1,4 +1,4 @@
-package rpcs
+package jsonrpc
 
 type Rpc struct {
 	name string
@@ -9,7 +9,4 @@ type Rpc struct {
 type RpcsConfig struct {
 	Host      string
 	Port      int
-	ZkPools   []Rpc `toml:"zk-pools"`
-	Moralis   []string
-	HeartBeat Rpc `toml:"heart-beat ,omitempty"`
 }

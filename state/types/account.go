@@ -8,9 +8,11 @@ import (
 	"maps"
 	"math/big"
 	"sync"
+	"time"
 )
 
 const UserHaveAccountsMaxNumber = 1
+const HistoryPageSize = 10
 
 var Lock sync.RWMutex
 
@@ -22,10 +24,63 @@ func (n Nonce) Copy() Nonce {
 
 type UserAccount map[common.Address]map[common.Address]AccountInfo
 
+type Token struct {
+	Address  string `json:"address"`
+	Decimals int    `json:"decimals"`
+	Symbol   string `json:"symbol"`
+	Name     string `json:"name"`
+	Logo     string `json:"logo"`
+}
+
+type HistoryDetail struct {
+	Token   Token  `json:"token"`
+	Address string `json:"address"`
+	Value   string `json:"value"`
+}
+
+type AccountHistory struct {
+	OrderType   int           `json:"orderType"`
+	From        HistoryDetail `json:"from"`
+	To          HistoryDetail `json:"to"`
+	SourceChain uint64        `json:"sourceChain"`
+	TargetChain uint64        `json:"targetChain"`
+	SourceHash  string        `json:"sourceHash"`
+	TargetHash  string        `json:"targetHash"`
+	SwapHash    string        `json:"swapHash"`
+	Time        int64         `json:"time"`
+}
+
+func ToUserOperationHis(tx string, op pool.UserOperation) AccountHistory {
+	uoHis := AccountHistory{
+		OrderType: 0,
+		From: HistoryDetail{
+			Address: op.Sender.Hex(),
+			Value: op.OperationValue.String(),
+		},
+		To: HistoryDetail{
+			Address: op.Sender.Hex(),
+			Value: op.OperationValue.String(),
+		},
+		SourceChain: op.ChainId.Uint64(),
+		TargetChain: op.ChainId.Uint64(),
+		SourceHash: tx,
+		Time: time.Now().Unix(),
+	}
+	if op.OperationType == pool.DepositAction {
+		uoHis.OrderType = 0
+		uoHis.TargetChain = 28516
+	} else if op.OperationType == pool.WithdrawAction {
+		uoHis.OrderType = 1
+		uoHis.SourceChain = 28516
+	}
+	return uoHis
+}
+
 type AccountInfo struct {
 	Nonce          Nonce
 	Gas            *big.Int
 	UserOperations []*pool.UserOperation
+	HistoryPage    uint64
 }
 
 func (info *AccountInfo) deepCopy() *AccountInfo {
@@ -114,7 +169,6 @@ func (u *UserAccount) GetAccount(user, account common.Address) (*AccountInfo, er
 }
 
 func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperation) error {
-
 	accountInfo, err := u.GetAccount(signedUserOp.Owner, signedUserOp.Sender)
 	if err != nil {
 		return err

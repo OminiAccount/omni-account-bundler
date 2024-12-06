@@ -10,13 +10,13 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/synchronizer"
 	"github.com/OAB/utils"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/OAB/utils/log"
 	"path/filepath"
 )
 
 type Processor struct {
 	ctx context.Context
-	cfg config.Config
+	cfg *config.Config
 
 	pool         *pool.Pool
 	server       *jsonrpc.Server
@@ -28,11 +28,11 @@ type Processor struct {
 var processor *Processor
 
 // NewProcessor Initialize the processor
-func NewProcessor(cfg config.Config) (*Processor, error) {
+func NewProcessor(cfg *config.Config) (*Processor, error) {
 	ctx := context.Background()
 
 	// Connect to levelDB
-	levelDBDir, err := filepath.Abs("../../db")
+	levelDBDir, err := filepath.Abs("./db")
 	if _, err = utils.PathExists(levelDBDir); err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	log.Info("Ethereum successfully initialized")
 
 	// Init State
-	stateConfig, err := state.NewConfig(ctx, levelDB, cfg)
+	stateConfig, err := state.NewConfig(ctx, levelDB)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 	log.Info("Synchronizer successfully initialized")
 
 	// jsonrpc
-	server := createJSONRPCServer(cfg.JsonRpc, poolInstance, st)
+	server := createJSONRPCServer(cfg.JsonRpc, st)
 	log.Info("JSONRPCServer successfully initialized")
 
 	processor = &Processor{
@@ -80,6 +80,7 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 		ethereum:     ethereum,
 		synchronizer: sync,
 		state:        st,
+		pool:         poolInstance,
 	}
 
 	return processor, nil
@@ -89,18 +90,18 @@ func NewProcessor(cfg config.Config) (*Processor, error) {
 func (p *Processor) Start() error {
 	// start rpc server
 	p.server.Start()
-	p.synchronizer.Start()
 	p.state.Start()
-
+	p.pool.StartAutoFlush()
+	p.synchronizer.Start()
 	return nil
 }
 
 // Stop a processor
 func (p *Processor) Stop() {
-	log.Warn("Stopping processor")
+	log.Warn("stopping processor")
 	//p.service.Stop()
 	p.synchronizer.Stop()
+	p.pool.StopAutoFlush()
 	p.state.Stop()
-	log.Warn("Processor stopped")
-
+	log.Warn("processor stopped")
 }

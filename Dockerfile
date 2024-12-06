@@ -13,5 +13,8 @@ RUN mkdir /app
 COPY --from=build /src/oa-bundler /app/oa-bundler
 
 WORKDIR /app
+RUN chmod +x /app/oa-bundler
+
 EXPOSE 8100
-CMD ["/bin/sh", "-c", "/app/oa-bundler"]
+CMD ["/app/oa-bundler", "processor", "--config", "/app/develop.toml"]
+

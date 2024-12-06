@@ -3,18 +3,16 @@ package synchronizer
 import (
 	"context"
 	"github.com/OAB/etherman"
-	"github.com/OAB/pool"
 	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
+	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 type Synchronizer struct {
 	pool      types.PoolInterface
 	ether     *etherman.EtherMan
 	state     types.StateInterface
-	logger    log.Logger
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	storage   ethdb.Database
@@ -26,7 +24,6 @@ func NewSynchronizer(p types.PoolInterface, ethereum *etherman.EtherMan, state t
 		pool:      p,
 		ether:     ethereum,
 		state:     state,
-		logger:    log.New("service", "synchronizer"),
 		ctx:       ctx,
 		cancelCtx: cancel,
 		storage:   db,
@@ -34,48 +31,51 @@ func NewSynchronizer(p types.PoolInterface, ethereum *etherman.EtherMan, state t
 }
 
 func (s *Synchronizer) Start() {
-	s.logger.Info("Sync start")
+	log.Info("Sync start")
 	acFunc := func(acc etherman.AccountCreateData) {
-		s.logger.Info("Synchronize to a new account mapping", "user", acc.Owner, "account", acc.Account)
+		log.Infof("Synchronize to a new account mapping, user: %s, account: %s", acc.Owner, acc.Account)
 		err := s.state.AddNewMapping(stateTypes.AccountMapping{
 			User:    acc.Owner,
 			Account: acc.Account,
 		})
 		if err != nil {
-			s.logger.Warn("Add a new account mapping error", "error", err)
+			log.Error("Add a new account mapping error", "error", err)
 		}
 	}
 	dpFunc := func(dp etherman.DepositData) {
-		s.logger.Info("Synchronize to a new deposit ticket")
-		s.pool.AddTicket(&pool.TicketFull{
-			Ticket: pool.Ticket{
-				User:   dp.Account,
-				Amount: dp.Amount,
-			},
-			Type: pool.Deposit,
-		})
+		log.Infof("Synchronize to a new deposit ticket, data: %+v", dp)
+		ticker := s.pool.GetTicket(dp.Did)
+		if ticker == nil {
+			log.Errorf("invalid deposit operation, data: %+v", dp)
+			return
+		}
+		if ticker.User != dp.Account {
+			log.Errorf("invalid deposit signedUserOperation, account mismatch, data: %+v", dp)
+			return
+		}
+		if ticker.Amount.Uint64() != dp.Amount.Uint64() {
+			log.Errorf("invalid deposit signedUserOperation, amount mismatch, data: %+v", dp)
+			return
+		}
+		if err := s.state.AddAccountGas(ticker.SignedUserOp); err != nil {
+			log.Errorf("deposit signedUserOperation, add account gas error: %+v", err)
+			return
+		}
+		s.pool.AddSignedUserOperation(ticker.SignedUserOp)
 	}
 	wtFunc := func(wt etherman.WithdrawData) {
-		s.logger.Info("Synchronize to a new withdraw ticket")
-		// TODO check withdraw
-		/*s.pool.AddTicket(&pool.TicketFull{
-			Ticket: pool.Ticket{
-				User:   wt.Account,
-				Amount: wt.Amount,
-			},
-			Type: pool.Withdraw,
-		})*/
+		log.Info("Synchronize to a new withdraw ticket，data: %+v", wt)
 	}
 	for _, cli := range s.ether.ChainsClient {
-		chainSync, err := etherman.NewSynchronizer(s.storage, cli, 0, acFunc, dpFunc, wtFunc)
+		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, dpFunc, wtFunc)
 		if err != nil {
-			panic(err.Error())
+			log.Fatal(err.Error())
 		}
 		go chainSync.Sync()
 	}
 }
 
 func (s *Synchronizer) Stop() {
-	s.logger.Info("Sync stop")
+	log.Info("sync stop")
 	s.cancelCtx()
 }

@@ -1,57 +1,96 @@
 package config
 
 import (
-	"github.com/BurntSushi/toml"
+	"bytes"
 	"github.com/OAB/etherman"
-	"github.com/OAB/jsonrpc/rpcs"
+	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
+	"github.com/OAB/utils/log"
+	"github.com/mitchellh/mapstructure"
+	"github.com/spf13/viper"
 	_ "github.com/spf13/viper"
-	"os"
+	"github.com/urfave/cli/v2"
+	"path/filepath"
+	"strings"
 )
+
+const FlagCfg = "config"
 
 // Config represents the `env.toml` file used to configure the processor
 type Config struct {
-	Ethereum etherman.Config `toml:"ethereum"`
-	DB       DBConfig        `toml:"db"`
-	JsonRpc  rpcs.RpcsConfig `toml:"jsonrpc"`
-	Instant  InstantConfig
-	Pool     pool.Config `toml:"pool"`
+	Ethereum etherman.Config    `mapstructure:"ethereum"`
+	DB       DBConfig           `mapstructure:"db"`
+	JsonRpc  jsonrpc.RpcsConfig `mapstructure:"jsonrpc"`
+	Pool     pool.Config        `mapstructure:"pool"`
+	Log      log.Config         `mapstructure:"log"`
 }
 
 // DBConfig configures the mysql database
 type DBConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Name     string
+	Host     string  `mapstructure:"host"`
+	Port     int  `mapstructure:"port"`
+	User     string  `mapstructure:"user"`
+	Password string  `mapstructure:"password"`
+	Name     string  `mapstructure:"name"`
 }
 
-// InstantConfig configures the networks submit or commit wait time
-type InstantConfig struct {
-	EthereumSubmitWait     int64 `toml:"ethereum-submit-wait" mapstructure:"ethereum-submit-wait"`
-	PolygonZkEVMSubmitWait int64 `toml:"polygon-zkevm-submit-wait" mapstructure:"polygon-zkevm-submit-wait"`
-	EthereumCommitWait     int64 `mapstructure:"ethereum-commit-wait"`
-	PolygonZkEVMCommitWait int64 `mapstructure:"polygon-zkevm-commit-wait"`
-}
+// Default parses the default configuration values.
+func Default() (*Config, error) {
+	var cfg Config
+	viper.SetConfigType("toml")
 
-// LoadConfig loads the `develop.toml` config file from a given path
-func LoadConfig(path string) (Config, error) {
-	var conf Config
-
-	// Read the config file.
-	data, err := os.ReadFile(path)
+	err := viper.ReadConfig(bytes.NewBuffer([]byte(DefaultValues)))
 	if err != nil {
-		return conf, err
+		return nil, err
+	}
+	err = viper.Unmarshal(&cfg, viper.DecodeHook(mapstructure.TextUnmarshallerHookFunc()))
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// Load loads the configuration
+func Load(ctx *cli.Context) (*Config, error) {
+	cfg, err := Default()
+	if err != nil {
+		return nil, err
+	}
+	configFilePath := ctx.String(FlagCfg)
+	if configFilePath != "" {
+		dirName, fileName := filepath.Split(configFilePath)
+
+		fileExtension := strings.TrimPrefix(filepath.Ext(fileName), ".")
+		fileNameWithoutExtension := strings.TrimSuffix(fileName, "."+fileExtension)
+
+		viper.AddConfigPath(dirName)
+		viper.SetConfigName(fileNameWithoutExtension)
+		viper.SetConfigType(fileExtension)
+	}
+	viper.AutomaticEnv()
+	replacer := strings.NewReplacer(".", "_")
+	viper.SetEnvKeyReplacer(replacer)
+	viper.SetEnvPrefix("OMNI_BUNDLER")
+	err = viper.ReadInConfig()
+	if err != nil {
+		_, ok := err.(viper.ConfigFileNotFoundError)
+		if ok {
+			log.Infof("config file not found")
+		} else {
+			log.Infof("error reading config file: ", err)
+			return nil, err
+		}
 	}
 
-	// Replace environment variables.
-	data = []byte(os.ExpandEnv(string(data)))
-
-	// Decode the TOML data.
-	if _, err := toml.Decode(string(data), &conf); err != nil {
-		return conf, err
+	decodeHooks := []viper.DecoderConfigOption{
+		// this allows arrays to be decoded from env var separated by ",", example: MY_VAR="value1,value2,value3"
+		viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(mapstructure.TextUnmarshallerHookFunc(), mapstructure.StringToSliceHookFunc(","))),
 	}
 
-	return conf, nil
+	err = viper.Unmarshal(&cfg, decodeHooks...)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
 }

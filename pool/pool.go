@@ -1,8 +1,9 @@
 package pool
 
 import (
+	"context"
+	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"sync"
 	"time"
 )
@@ -11,21 +12,22 @@ type Pool struct {
 	mu            sync.Mutex
 	cfg           Config
 	lastFlushTime time.Time
-	context       chan *BatchContext
-	stopChan      chan struct{}
+	batchCtx      chan *BatchContext
+	ctx           context.Context
+	cancelCtx     context.CancelFunc
 
 	storage *Storage
-
-	logger log.Logger
 }
 
 func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
+	ctx, cancel := context.WithCancel(context.Background())
 	pool := &Pool{
+		ctx:           ctx,
+		cancelCtx:     cancel,
 		cfg:           cfg,
 		lastFlushTime: time.Now(),
-		context:       make(chan *BatchContext, 100),
+		batchCtx:      make(chan *BatchContext, 100),
 		storage:       NewStorage(db),
-		logger:        log.New("service", "pool"),
 	}
 
 	pool.LoadCache()
@@ -35,77 +37,92 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 
 func (p *Pool) AddTicket(ticket *TicketFull) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.logger.Info("Add a new ticket", "ticket", ticket)
+	log.Info("Add a new ticket", "ticket", ticket)
 	p.storage.addTicket(ticket)
+	p.mu.Unlock()
+}
+
+func (p *Pool) GetTicket(id string) *TicketFull {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.storage.getTicket(id)
 }
 
 func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.logger.Info("Add a new sign userOperation", "sender", op.Sender.String(), "nonce", op.Nonce.Uint64(), "chainId", op.ChainId.ToInt().String(), "Owner", op.Owner.String())
-
+	log.Infof("Add a new sign userOperation, Owner: %s, sender: %s, nonce: %d, chainId: %s", op.Owner.String(), op.Sender.String(), op.Nonce.Uint64(), op.ChainId.ToInt().String())
 	p.storage.addUserOp(op)
-	p.CheckFlush()
+	p.mu.Unlock()
+	//p.CheckFlush()
 }
 
 func (p *Pool) CheckFlush() {
 	// If the flushInterval is not 0, check both maxOps and time interval
-	if p.cfg.flushInterval != 0 {
-		if uint64(len(p.storage.UserOps)) >= p.cfg.maxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.flushInterval) {
+	if p.cfg.FlushInterval != 0 {
+		if uint64(len(p.storage.UserOps)) >= p.cfg.MaxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.FlushInterval) {
 			p.Flush()
 		}
 	} else {
-		if uint64(len(p.storage.UserOps)) >= p.cfg.maxOps {
+		if uint64(len(p.storage.UserOps)) >= p.cfg.MaxOps {
 			p.Flush()
 		}
 	}
 }
 
 func (p *Pool) Flush() {
-	log.Debug("Flushing memory pool...")
-
-	context := NewBatchContext(p.storage.getUserOps())
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.storage.getUserOps()) < 1 {
+		return
+	}
+	log.Debug("flushing memory pool...")
+	batchCtx := NewBatchContext(p.storage.getUserOps())
 
 	// Empty the memory pool
 	p.storage.empty()
 	p.lastFlushTime = time.Now()
 
 	// Execute specific processing logic
-	p.context <- context
+	p.batchCtx <- batchCtx
 }
 
 func (p *Pool) StartAutoFlush() {
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			p.CheckFlush()
-		case <-p.stopChan:
-			ticker.Stop()
-			return
+	log.Info("pool start")
+	go func() {
+		ticker := time.NewTicker(time.Second*10)
+		for {
+			select {
+			case <-ticker.C:
+				p.CheckFlush()
+			case <-p.ctx.Done():
+				ticker.Stop()
+				return
+			default:
+			}
 		}
-	}
+	}()
 }
 
 func (p *Pool) StopAutoFlush() {
-	close(p.stopChan)
+	log.Info("pool stop auto flush")
+	p.cancelCtx()
 }
 
-func (p *Pool) Context() chan *BatchContext {
-	return p.context
+func (p *Pool) BatchContext() chan *BatchContext {
+	return p.batchCtx
 }
 
-func (p *Pool) Cache() {
+func (p *Pool) Cache() error {
 	if err := p.storage.cacheUserOps(); err != nil {
-		p.logger.Error("pool cache userOps error", "error", err)
+		log.Errorf("pool cache userOps error: %+v", err)
+		return err
 	}
+	return nil
 }
 
 func (p *Pool) LoadCache() {
-	p.logger.Info("Load cache")
+	log.Info("load pool cache")
 	if err := p.storage.loadUserOps(); err != nil {
-		p.logger.Error("pool load cache userOps error", "error", err)
+		log.Error("pool load cache userOps error", "error", err)
 	}
 }

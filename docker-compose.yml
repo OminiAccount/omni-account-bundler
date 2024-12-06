@@ -7,17 +7,20 @@ services:
   oa-bundler:
     container_name: oa-bundler
     image: orbiter/oa-bundler:v0.0.1
-    restart: unless-stopped
+#    restart: unless-stopped
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
     ports:
       - 8100:8100
     volumes:
       - ./develop.toml:/app/develop.toml
       - ./sender.keystore:/app/sender.keystore
+      - ./log:/app/log
       - ./db:/db
-    command:
-      - "/bin/sh"
-      - "-c"
-      - "/app/oa-bundler processor --config /app/develop.toml"
+#    command:
+#      - "/bin/sh"
+#      - "-c"
+#      - "/app/oa-bundler processor --config /app/develop.toml"
     logging:
       driver: json-file
       options:

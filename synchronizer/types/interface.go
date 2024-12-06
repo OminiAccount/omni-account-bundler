@@ -9,7 +9,9 @@ import (
 
 type (
 	PoolInterface interface {
+		AddSignedUserOperation(op *pool.SignedUserOperation)
 		AddTicket(ticket *pool.TicketFull)
+		GetTicket(id string) *pool.TicketFull
 	}
 
 	EthereumInterface interface {
@@ -19,5 +21,6 @@ type (
 
 	StateInterface interface {
 		AddNewMapping(mapping types.AccountMapping) error
+		AddAccountGas(*pool.SignedUserOperation) error
 	}
 )

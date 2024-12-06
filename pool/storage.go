@@ -1,7 +1,7 @@
 package pool
 
 import (
-	"fmt"
+	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/msgpack"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -12,7 +12,7 @@ var (
 
 type Storage struct {
 	UserOps []*SignedUserOperation
-	Tickets []*TicketFull
+	Tickets map[string]*TicketFull
 
 	db ethdb.Database
 }
@@ -20,20 +20,23 @@ type Storage struct {
 func NewStorage(db ethdb.Database) *Storage {
 	return &Storage{
 		UserOps: []*SignedUserOperation{},
-		Tickets: []*TicketFull{},
+		Tickets: map[string]*TicketFull{},
 		db:      db,
 	}
 }
 
 func (s *Storage) addTicket(ticket *TicketFull) {
-	s.Tickets = append(s.Tickets, ticket)
+	s.Tickets[ticket.Did] = ticket
 }
 
-func (s *Storage) getTickets() []*TicketFull {
-	return s.Tickets
+func (s *Storage) getTicket(id string) *TicketFull {
+	return s.Tickets[id]
 }
 
 func (s *Storage) addUserOp(userOp *SignedUserOperation) {
+	if userOp.OperationType == DepositAction {
+		delete(s.Tickets, userOp.Did)
+	}
 	s.UserOps = append(s.UserOps, userOp)
 }
 
@@ -76,8 +79,7 @@ func (s *Storage) loadUserOps() error {
 		s.UserOps = decodeSigUserOps.UserOps
 		s.Tickets = decodeSigUserOps.Tickets
 
-		fmt.Println("load cache userOps length ", len(s.UserOps))
-		//s.userOps = []SignedUserOperation{}
+		log.Info("load cache userOps length ", len(s.UserOps))
 	}
 	return nil
 }

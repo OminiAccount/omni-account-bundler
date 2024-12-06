@@ -2,9 +2,9 @@ package metrics
 
 import (
 	"fmt"
+	"github.com/OAB/utils/log"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -13,7 +13,7 @@ var EnabledExpensive = false
 
 // Setup starts a dedicated metrics server at the given address.
 // This function enables metrics reporting separate from pprof.
-func Setup(address string, logger log.Logger) *http.ServeMux {
+func Setup(address string) *http.ServeMux {
 	prometheus.DefaultRegisterer.MustRegister(defaultSet)
 
 	prometheusMux := http.NewServeMux()
@@ -26,10 +26,10 @@ func Setup(address string, logger log.Logger) *http.ServeMux {
 
 	go func() {
 		if err := promServer.ListenAndServe(); err != nil {
-			logger.Error("Failure in running Prometheus server", "err", err)
+			log.Error("Failure in running Prometheus server", "err", err)
 		}
 	}()
 
-	logger.Info("Enabling metrics export to prometheus", "path", fmt.Sprintf("http://%s/debug/metrics/prometheus", address))
+	log.Info("Enabling metrics export to prometheus", "path", fmt.Sprintf("http://%s/debug/metrics/prometheus", address))
 	return prometheusMux
 }

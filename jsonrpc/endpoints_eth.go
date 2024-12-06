@@ -5,8 +5,8 @@ import (
 	"github.com/OAB/jsonrpc/types"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
+	state_types "github.com/OAB/state/types"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
 )
 
 type EthEndpoints struct {
@@ -37,20 +37,27 @@ func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
 	return e.state.GetAccountsForUser(user)
 }
 
-type AccountInfo struct {
-	Balance        *big.Int
-	Nonce          uint64
-	UserOperations []*pool.UserOperation
-}
-
 func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint64) (interface{}, error) {
-	balance, nonce, userOps, err := e.state.GetAccountInfo(user, account, chainId)
+	balance, nonce, page, userOps, err := e.state.GetAccountInfo(user, account, chainId)
 	if err != nil {
 		return nil, err
 	}
-	return AccountInfo{
+	return types.AccountInfo{
 		Balance:        balance,
-		Nonce:          nonce,
+		Nonce:          nonce + 1,
 		UserOperations: userOps,
+		LatestPage:     page,
 	}, nil
+}
+
+func (e *EthEndpoints) ReportHis(user, account common.Address, data state_types.AccountHistory) error {
+	return e.state.SaveAccountHis(user, account, data)
+}
+
+func (e *EthEndpoints) GetUserHistory(user, account common.Address, page uint64) (interface{}, error) {
+	_, _, _, _, err := e.state.GetAccountInfo(user, account, 0)
+	if err != nil {
+		return nil, err
+	}
+	return e.state.GetAccountHis(user, account, page)
 }

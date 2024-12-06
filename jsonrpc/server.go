@@ -1,8 +1,7 @@
 package jsonrpc
 
 import (
-	"github.com/OAB/jsonrpc/rpcs"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"net"
 	"net/http"
@@ -17,7 +16,7 @@ const (
 )
 
 type Server struct {
-	cfg rpcs.RpcsConfig
+	cfg RpcsConfig
 	srv *rpc.Server
 }
 
@@ -26,7 +25,7 @@ type Service struct {
 	Service interface{}
 }
 
-func NewServer(cfg rpcs.RpcsConfig, service Service) *Server {
+func NewServer(cfg RpcsConfig, service Service) *Server {
 	server := rpc.NewServer()
 
 	if err := server.RegisterName(service.Name, service.Service); err != nil {
@@ -59,6 +58,6 @@ func (s *Server) Start() {
 	case err := <-errCh:
 		panic(err)
 	default:
-		log.Info("Client processor api server listening on", "addr", addr)
+		log.Infof("Client processor api server listening on: %s", addr)
 	}
 }

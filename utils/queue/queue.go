@@ -20,6 +20,14 @@ func NewConcurrentQueue[T any]() *ConcurrentQueue[T] {
 	return queue
 }
 
+func (q *ConcurrentQueue[T]) Lpush(item T) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	q.items = append([]T{item}, q.items...)
+	q.cond.Signal()
+}
+
 func (q *ConcurrentQueue[T]) Enqueue(item T) {
 	q.lock.Lock()
 	defer q.lock.Unlock()

@@ -3,13 +3,12 @@ package cli
 import (
 	"github.com/OAB/config"
 	"github.com/OAB/processor"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/OAB/utils/log"
 	"github.com/urfave/cli/v2"
-
-	oaLog "github.com/OAB/utils/log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type Cli struct {
@@ -23,7 +22,7 @@ type Cli struct {
 var (
 	ConfigFlag = &cli.StringFlag{
 		Name:    "config",
-		Value:   "../develop.toml",
+		Value:   "./develop.toml",
 		Aliases: []string{"c"},
 		Usage:   "path to config file",
 		EnvVars: []string{"CONFIG"},
@@ -32,47 +31,43 @@ var (
 
 // runProcessor is the entrypoint into the OAB(Omni Account Abstraction Client) Processor service.
 func runProcessor(ctx *cli.Context) error {
-	configPath := ctx.String(ConfigFlag.Name)
-	conf, err := config.LoadConfig(configPath)
-
+	conf, err := config.Load(ctx)
+	if err != nil {
+		panic("Failed to load config, error:"+err.Error())
+	}
+	log.Init(conf.Log)
+	log.Infof("%+v", conf)
 	log.Info("Starting OAB processor")
 
-	if err != nil {
-		log.Crit("Failed to load config", "message", err)
-	}
-
-	processor, err := processor.NewProcessor(conf)
+	proc, err := processor.NewProcessor(conf)
 	if err != nil {
 		log.Error("Unable to create OAB processor", "error", err)
 		return err
 	}
 
-	if err = processor.Start(); err != nil {
+	if err = proc.Start(); err != nil {
 		return err
 	}
 
 	log.Info("OAB Processor started")
 
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	// SIGHUP: terminal closed
 	// SIGINT: Ctrl+C
 	// SIGTERM: program exit
 	// SIGQUIT: Ctrl+/
-	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-	waitElegantExit(signalChan, processor)
+	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	waitElegantExit(signalChan, proc)
 
 	return nil
 }
 
-func waitElegantExit(signalChan chan os.Signal, processor *processor.Processor) {
-	for i := range signalChan {
-		switch i {
-		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-			processor.Stop()
-			os.Exit(0)
-		}
-	}
+func waitElegantExit(signalChan chan os.Signal, proc *processor.Processor) {
+	s := <-signalChan
+	log.Infof("receive exit signal: %v", s)
+	proc.Stop()
+	time.Sleep(time.Second*5)
+	os.Exit(0)
 }
 
 // Run make an instance method on Cli called Run that runs cli
@@ -82,8 +77,6 @@ func (c *Cli) Run(args []string) error {
 }
 
 func NewCli(GitVersion string, GitCommit string, GitDate string) *Cli {
-	oaLog.SetupDefaults()
-
 	flags := []cli.Flag{
 		ConfigFlag,
 	}

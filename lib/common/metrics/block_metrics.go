@@ -1,10 +1,8 @@
 package metrics
 
 import (
+	"github.com/OAB/utils/log"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
-
 	"github.com/OAB/lib/metrics"
 )
 
@@ -18,7 +16,7 @@ var (
 	BlockProducerProductionDelay     = metrics.NewSummary(`block_producer_delay{type="production"}`)
 )
 
-func UpdateBlockConsumerHeaderDownloadDelay(parentTime uint64, blockNumber uint64, log log.Logger) {
+func UpdateBlockConsumerHeaderDownloadDelay(parentTime uint64, blockNumber uint64) {
 	t := time.Unix(int64(parentTime), 0)
 	BlockConsumerHeaderDownloadDelay.ObserveDuration(t)
 
@@ -27,7 +25,7 @@ func UpdateBlockConsumerHeaderDownloadDelay(parentTime uint64, blockNumber uint6
 	}
 }
 
-func UpdateBlockConsumerBodyDownloadDelay(parentTime uint64, blockNumber uint64, log log.Logger) {
+func UpdateBlockConsumerBodyDownloadDelay(parentTime uint64, blockNumber uint64) {
 	t := time.Unix(int64(parentTime), 0)
 	BlockConsumerBodyDownloadDelay.ObserveDuration(t)
 
@@ -36,7 +34,7 @@ func UpdateBlockConsumerBodyDownloadDelay(parentTime uint64, blockNumber uint64,
 	}
 }
 
-func UpdateBlockConsumerPreExecutionDelay(parentTime uint64, blockNumber uint64, log log.Logger) {
+func UpdateBlockConsumerPreExecutionDelay(parentTime uint64, blockNumber uint64) {
 	t := time.Unix(int64(parentTime), 0)
 	BlockConsumerPreExecutionDelay.ObserveDuration(t)
 
@@ -45,7 +43,7 @@ func UpdateBlockConsumerPreExecutionDelay(parentTime uint64, blockNumber uint64,
 	}
 }
 
-func UpdateBlockConsumerPostExecutionDelay(parentTime uint64, blockNumber uint64, log log.Logger) {
+func UpdateBlockConsumerPostExecutionDelay(parentTime uint64, blockNumber uint64) {
 	t := time.Unix(int64(parentTime), 0)
 	BlockConsumerPostExecutionDelay.ObserveDuration(t)
 
@@ -54,7 +52,7 @@ func UpdateBlockConsumerPostExecutionDelay(parentTime uint64, blockNumber uint64
 	}
 }
 
-func UpdateBlockProducerProductionDelay(parentTime uint64, blockNumber uint64, log log.Logger) {
+func UpdateBlockProducerProductionDelay(parentTime uint64, blockNumber uint64) {
 	t := time.Unix(int64(parentTime), 0)
 	BlockProducerProductionDelay.ObserveDuration(t)
 
