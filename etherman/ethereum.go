@@ -2,6 +2,7 @@ package etherman
 
 import (
 	"github.com/OAB/etherman/contracts/EntryPoint"
+	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
@@ -12,14 +13,14 @@ import (
 )
 
 type EtherMan struct {
-	ChainsClient map[chains.ChainId]*ethereumClient
+	chainsClient map[chains.ChainId]*EthereumClient
 	db           ethdb.Database
 }
 
 // NewEthereum create a EthereumClient that support multiple chains
 func NewEthereum(cfg Config, ethDb ethdb.Database) (*EtherMan, error) {
 	em := &EtherMan{
-		ChainsClient: make(map[chains.ChainId]*ethereumClient, chains.MaxChainInfoLength),
+		chainsClient: make(map[chains.ChainId]*EthereumClient, chains.MaxChainInfoLength),
 		db:           ethDb,
 	}
 	for _, n := range cfg.Networks {
@@ -34,26 +35,36 @@ func NewEthereum(cfg Config, ethDb ethdb.Database) (*EtherMan, error) {
 		}
 		cli.sender = opts.From
 		cli.auth = *opts
-		em.ChainsClient[chainId] = cli
+		em.chainsClient[chainId] = cli
 	}
 	return em, nil
 }
 
-func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, msg []byte) (*big.Int, error) {
-	etherCli := ether.ChainsClient[0]
+func (ether *EtherMan) GetChains() map[chains.ChainId]*EthereumClient {
+	return ether.chainsClient
+}
+
+func (ether *EtherMan) GetChainCli(c chains.ChainId) *EthereumClient {
+	return ether.chainsClient[c]
+}
+
+func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperations []SyncRouter.BaseStructPackedUserOperation) (*big.Int, error) {
+	etherCli := ether.chainsClient[0]
 	opts := new(bind.CallOpts)
 	opts.From = etherCli.sender
+	log.Infof("EstimateGas destChainId: %d, destContract: %s, userOperations: %+v",
+		chainID, ether.chainsClient[chains.ChainId(chainID)].entryPointAddr, userOperations)
 	return etherCli.syncRouter.FetchOmniMessageFee(
 		opts,
 		chainID,
-		ether.ChainsClient[chains.ChainId(chainID)].entryPointAddr,
+		ether.chainsClient[chains.ChainId(chainID)].entryPointAddr,
 		useFee,
-		msg,
+		userOperations,
 	)
 }
 
-func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []EntryPoint.IEntryPointBatchData, extraInfo EntryPoint.IEntryPointChainsExecuteInfo) (common.Hash, error) {
-	etherCli := ether.ChainsClient[0]
+func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []EntryPoint.BaseStructBatchData, extraInfo EntryPoint.BaseStructChainsExecuteInfo) (common.Hash, error) {
+	etherCli := ether.chainsClient[0]
 	opts := etherCli.auth
 	//nonce, err := etherCli.ethClient.NonceAt(context.Background(), etherCli.sender, nil)
 	//if err != nil {
@@ -71,7 +82,8 @@ func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []Entry
 	//opts.Value = big.NewInt(0)
 
 	extraInfo.Beneficiary = etherCli.sender
-	tx, err := etherCli.entryPoint.VerifyBatch(&opts, proof, batches, extraInfo)
+	log.Infof("VerifyBatches proof: %s, batches: %+v, extraInfo: %+v", proof.String(), batches, extraInfo)
+	tx, err := etherCli.entryPoint.VerifyBatches(&opts, proof, batches, extraInfo)
 	if err != nil {
 		return common.Hash{}, err
 	}

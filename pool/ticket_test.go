@@ -3,12 +3,36 @@ package pool
 import (
 	"fmt"
 	"github.com/OAB/utils/merkletree"
+	"github.com/OAB/utils/packutils"
+	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 	"testing"
 )
+
+func TestPackUint(t *testing.T) {
+	a := big.NewInt(12)
+	b := big.NewInt(13)
+	value, _ := packutils.PackUints(a, b)
+	t.Log(value)
+	a,b,_ = packutils.UnpackUints(value)
+	t.Log(a.Uint64(), b.Uint64())
+
+	result := poseidon.H4ToScalar([]uint64{13, 14, 0, 0})
+
+	value, _ = packutils.PackUints(a, result)
+	t.Log(value)
+
+	a, b, _ = packutils.UnpackUints(value)
+	padded := make([]byte, 16)
+	copy(padded[16-len(b.Bytes()):], b.Bytes())
+	t.Log(padded)
+	b = big.NewInt(0).SetBytes(padded[8:])
+	c := big.NewInt(0).SetBytes(padded[:8])
+	t.Log(a.Uint64(), b.Uint64(), c.Uint64())
+}
 
 func TestHashSignedUserOperationV1s(t *testing.T) {
 	dataHash := common.FromHex("0xcd812b0013bde63ae0b83e7500f07ab18edde7b86ba1bf0c1e86de4f8377a165")
@@ -60,7 +84,7 @@ func TestEip712(t *testing.T) {
 
 	for _, userOperation := range sus {
 		fmt.Println("=====================")
-		fmt.Printf("Address: %s ,Nonce: %d ,ChainId %s ,OperationType: %d ,operationValue: %d \n", userOperation.Owner, userOperation.Nonce, userOperation.ChainId.String(), userOperation.OperationType, userOperation.OperationValue)
+		fmt.Printf("Address: %s ,Nonce: %d ,ChainId %+v ,OperationType: %d ,operationValue: %d \n", userOperation.Owner, userOperation.Nonce, userOperation.ChainId, userOperation.OperationType, userOperation.OperationValue)
 
 		// balance
 		var balance big.Int
@@ -91,7 +115,7 @@ func TestEip712(t *testing.T) {
 
 		// nonce
 		var nonce big.Int
-		nonceU256, err := tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId.String())
+		nonceU256, err := tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId[0].String())
 		if err != nil {
 			fmt.Println("accountNonce error", err)
 		}
@@ -99,7 +123,7 @@ func TestEip712(t *testing.T) {
 		fmt.Println("oldNonce", nonce.Uint64())
 		nonce.Add(&nonce, big.NewInt(1))
 		fmt.Println("newNonce", nonce.Uint64())
-		tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId.String())
+		tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId[0].String())
 
 		//expectGasBalance, expectNonce := s.storage.Account.GetAccountInfoByAccountAndChainId(userOperation.Sender, userOperation.ChainId.ToInt().Uint64())
 		//fmt.Println("expectGasBalance", expectGasBalance)

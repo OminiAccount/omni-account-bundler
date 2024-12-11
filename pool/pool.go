@@ -50,7 +50,7 @@ func (p *Pool) GetTicket(id string) *TicketFull {
 
 func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
-	log.Infof("Add a new sign userOperation, Owner: %s, sender: %s, nonce: %d, chainId: %s", op.Owner.String(), op.Sender.String(), op.Nonce.Uint64(), op.ChainId.ToInt().String())
+	log.Infof("Add a new sign userOperation, Owner: %s, sender: %s, nonce: %d, chainId: %+v", op.Owner.String(), op.Sender.String(), op.Nonce.Uint64(), op.ChainId)
 	p.storage.addUserOp(op)
 	p.mu.Unlock()
 	//p.CheckFlush()
@@ -89,7 +89,7 @@ func (p *Pool) Flush() {
 func (p *Pool) StartAutoFlush() {
 	log.Info("pool start")
 	go func() {
-		ticker := time.NewTicker(time.Second*10)
+		ticker := time.NewTicker(time.Minute)
 		for {
 			select {
 			case <-ticker.C:
@@ -97,7 +97,6 @@ func (p *Pool) StartAutoFlush() {
 			case <-p.ctx.Done():
 				ticker.Stop()
 				return
-			default:
 			}
 		}
 	}()

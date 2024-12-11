@@ -11,14 +11,14 @@ import (
 
 type Synchronizer struct {
 	pool      types.PoolInterface
-	ether     *etherman.EtherMan
+	ether     types.EthereumInterface
 	state     types.StateInterface
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	storage   ethdb.Database
 }
 
-func NewSynchronizer(p types.PoolInterface, ethereum *etherman.EtherMan, state types.StateInterface, db ethdb.Database) (*Synchronizer, error) {
+func NewSynchronizer(p types.PoolInterface, ethereum types.EthereumInterface, state types.StateInterface, db ethdb.Database) (*Synchronizer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Synchronizer{
 		pool:      p,
@@ -66,7 +66,10 @@ func (s *Synchronizer) Start() {
 	wtFunc := func(wt etherman.WithdrawData) {
 		log.Info("Synchronize to a new withdraw ticket，data: %+v", wt)
 	}
-	for _, cli := range s.ether.ChainsClient {
+	for _, cli := range s.ether.GetChains() {
+		if !cli.IsNeedSync() {
+			continue
+		}
 		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, dpFunc, wtFunc)
 		if err != nil {
 			log.Fatal(err.Error())

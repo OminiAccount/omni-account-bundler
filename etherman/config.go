@@ -26,4 +26,5 @@ type Network struct {
 	SyncRouter     common.Address     `mapstructure:"sync-router"`
 	PrivateKeys    KeystoreFileConfig `mapstructure:"private_keys"`
 	GenBlockNumber uint64             `mapstructure:"gen-block"`
+	IsSync         uint8              `mapstructure:"is-sync"`
 }

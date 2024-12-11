@@ -23,13 +23,13 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 		return err
 	}
 
-	if aux.ChainId != "" {
+	/*if aux.ChainId != "" {
 		chainId, ok := new(big.Int).SetString(aux.ChainId, 0)
 		if !ok {
 			return fmt.Errorf("invalid ChainId value: %s", aux.ChainId)
 		}
 		s.ChainId = (*hexutil.Big)(chainId)
-	}
+	}*/
 
 	if aux.MainChainGasPrice != "" {
 		mainChainGasPrice, ok := new(big.Int).SetString(aux.MainChainGasPrice, 0)

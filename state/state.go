@@ -18,6 +18,7 @@ type State struct {
 	ethereum EthereumInterface
 	storage  *Storage
 	tree     *merkletree.SMT
+	his      *HistoryManager
 
 	proofQueue  *queue.ConcurrentQueue[Batch]
 	provenQueue *queue.ConcurrentQueue[ProofResult]
@@ -36,6 +37,7 @@ func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*Stat
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
 		storage:     NewStorage(cfg.LevelDB),
 	}
+	state.his = NewHistoryManager(ctx, cfg, state)
 
 	state.LoadCache()
 
@@ -46,9 +48,10 @@ func (s *State) Start() {
 	log.Info("state start")
 	go s.ProcessBatch()
 	go s.ExecuteBatch()
+	go s.his.Start()
 	go func() {
 		for {
-			time.Sleep(time.Minute)
+			time.Sleep(time.Second*5)
 			s.Persistence()
 		}
 	}()
@@ -108,14 +111,13 @@ func (s *State) ProcessBatch() {
 			}
 			log.Warn("Stopping PreProcessBatch due to context cancellation")
 			return
-		default:
 		}
 	}
 }
 
 func (s *State) ExecuteBatch() {
 	log.Info("ExecuteBatch start")
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-ticker.C:
@@ -132,13 +134,16 @@ func (s *State) ExecuteBatch() {
 			}
 			log.Warn("Stopping ExecuteBatch due to context cancellation")
 			return
-		default:
 		}
 	}
 }
 
+func (s *State) GetHisIns() *HistoryManager {
+	return s.his
+}
+
 func (s *State) Persistence() {
-	log.Info("cache state data into disk")
+	//log.Info("cache state data into disk")
 	if err := s.storage.cache(); err != nil {
 		log.Error("cache state data into disk error", "error", err)
 	}

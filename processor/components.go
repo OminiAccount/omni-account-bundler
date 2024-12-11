@@ -8,7 +8,7 @@ import (
 func createJSONRPCServer(cfg jsonrpc.RpcsConfig, state *state.State) *jsonrpc.Server {
 	s := jsonrpc.Service{
 		Name:    jsonrpc.APIEth,
-		Service: jsonrpc.NewEthEndpoints(state),
+		Service: jsonrpc.NewEthEndpoints(state, state.GetHisIns()),
 	}
 	return jsonrpc.NewServer(cfg, s)
 }

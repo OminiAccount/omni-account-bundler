@@ -6,6 +6,7 @@ import (
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/packutils"
 	"github.com/OAB/utils/poseidon"
+	"math/big"
 
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/ethereum/go-ethereum/common"
@@ -106,7 +107,18 @@ func decodeCircuitInput(val []byte) []*pool.SignedUserOperation {
 			log.Errorf("decodeCircuitInput unpack uints error: %v", err)
 		}
 		item.UserOperation.Nonce = hexutil.Uint64(nonce.Uint64())
-		item.UserOperation.ChainId = (*hexutil.Big)(chainid)
+		padded := make([]byte, 16)
+		copy(padded[16-len(chainid.Bytes()):], chainid.Bytes())
+		var chex []hexutil.Uint64
+		c1 := hexutil.Uint64(big.NewInt(0).SetBytes(padded[8:]).Uint64())
+		if c1.Uint64() > 0 {
+			chex = append(chex, c1)
+		}
+		c2 := hexutil.Uint64(big.NewInt(0).SetBytes(padded[:8]).Uint64())
+		if c2.Uint64() > 0 {
+			chex = append(chex, c2)
+		}
+		item.UserOperation.ChainId = chex
 		item.UserOperation.CallData = uo[OpInfoE:CallDataE]
 		mainGasLimit, destGasLimit, err := packutils.UnpackUints(uo[CallDataE:GasLimitE])
 		if err != nil {

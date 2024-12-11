@@ -56,7 +56,7 @@ func runProcessor(ctx *cli.Context) error {
 	// SIGINT: Ctrl+C
 	// SIGTERM: program exit
 	// SIGQUIT: Ctrl+/
-	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(signalChan, syscall.SIGKILL, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	waitElegantExit(signalChan, proc)
 
 	return nil

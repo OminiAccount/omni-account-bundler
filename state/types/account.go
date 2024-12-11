@@ -1,9 +1,11 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/OAB/pool"
+	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
 	"maps"
 	"math/big"
@@ -39,7 +41,10 @@ type HistoryDetail struct {
 }
 
 type AccountHistory struct {
-	OrderType   int           `json:"orderType"`
+	ID          string        `json:"id"`
+	Owner       string        `json:"owner"`
+	Account     string        `json:"account"`
+	OrderType   uint8           `json:"orderType"`
 	From        HistoryDetail `json:"from"`
 	To          HistoryDetail `json:"to"`
 	SourceChain uint64        `json:"sourceChain"`
@@ -50,21 +55,34 @@ type AccountHistory struct {
 	Time        int64         `json:"time"`
 }
 
-func ToUserOperationHis(tx string, op pool.UserOperation) AccountHistory {
+func (s AccountHistory) UniqueID() string {
+	data, _ := json.Marshal(s)
+	hashBytes, _ := poseidon.HashMessage(data)
+	return common.BytesToHash(poseidon.H4ToBytes(hashBytes)).Hex()
+}
+
+func ToUserOperationHis(id, owner, account, tx string, op pool.UserOperation) AccountHistory {
 	uoHis := AccountHistory{
+		ID:        id,
+		Owner:     owner,
+		Account:   account,
 		OrderType: 0,
 		From: HistoryDetail{
 			Address: op.Sender.Hex(),
-			Value: op.OperationValue.String(),
+			Value:   op.OperationValue.String(),
 		},
 		To: HistoryDetail{
 			Address: op.Sender.Hex(),
-			Value: op.OperationValue.String(),
+			Value:   op.OperationValue.String(),
 		},
-		SourceChain: op.ChainId.Uint64(),
-		TargetChain: op.ChainId.Uint64(),
-		SourceHash: tx,
-		Time: time.Now().Unix(),
+		SourceChain: op.ChainId[0].Uint64(),
+		SourceHash:  tx,
+		Time:        time.Now().Unix(),
+	}
+	if len(op.ChainId) > 1 {
+		uoHis.TargetChain = op.ChainId[1].Uint64()
+	} else {
+		uoHis.TargetChain = op.ChainId[0].Uint64()
 	}
 	if op.OperationType == pool.DepositAction {
 		uoHis.OrderType = 0
@@ -195,8 +213,8 @@ func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperat
 
 	// nonce ++
 	if opErr == nil {
-		accountInfo.increaseNonce(signedUserOp.ChainId.Uint64())
-		expectNonce := accountInfo.Nonce[signedUserOp.ChainId.Uint64()]
+		accountInfo.increaseNonce(signedUserOp.ChainId[0].Uint64())
+		expectNonce := accountInfo.Nonce[signedUserOp.ChainId[0].Uint64()]
 		if expectNonce != signedUserOp.Nonce.Uint64() {
 			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", signedUserOp.Owner, expectNonce, signedUserOp.Nonce.Uint64())
 		}

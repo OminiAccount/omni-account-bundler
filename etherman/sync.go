@@ -24,7 +24,7 @@ type Synchronizer interface {
 
 type ClientSynchronizer struct {
 	ctx            context.Context
-	etherCli       *ethereumClient
+	etherCli       *EthereumClient
 	storage        ethdb.Database
 	genBlockNumber uint64
 	networkID      chains.ChainId
@@ -35,7 +35,7 @@ type ClientSynchronizer struct {
 	wtFunc WithdrawFunc
 }
 
-func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *ethereumClient,
+func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumClient,
 	acFunc AccountCreateFunc, dpFunc DepositFunc, wtFunc WithdrawFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
 		storage:        db,
@@ -60,7 +60,7 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *ethereumC
 		cliSync.genBlockNumber = lastBlockSynced
 	}
 	if cliSync.genBlockNumber < 1 {
-		header, err := cliSync.etherCli.HeaderByNumber(context.Background(), nil)
+		header, err := cliSync.etherCli.Cli().HeaderByNumber(context.Background(), nil)
 		if err != nil || header == nil {
 			log.Fatal("networkID: %d, error getting latest block from. Error: %+v", cliSync.networkID, err)
 		}
@@ -107,7 +107,7 @@ func (s *ClientSynchronizer) Sync() {
 				return
 			}
 			if !s.synced {
-				header, err := s.etherCli.HeaderByNumber(s.ctx, nil)
+				header, err := s.etherCli.Cli().HeaderByNumber(s.ctx, nil)
 				if err != nil {
 					log.Errorf("networkID: %d, error getting latest block from. Error: %s", s.networkID, err.Error())
 					continue
@@ -128,7 +128,7 @@ func (s *ClientSynchronizer) Stop() {
 }
 
 func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) {
-	header, err := s.etherCli.HeaderByNumber(s.ctx, nil)
+	header, err := s.etherCli.Cli().HeaderByNumber(s.ctx, nil)
 	if err != nil {
 		log.Error(err)
 		return lastBlockSynced, err

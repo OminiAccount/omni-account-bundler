@@ -14,6 +14,9 @@ type StateInterface interface {
 	GetAccountsForUser(user common.Address) *[]common.Address
 	GetAccountInfo(user, account common.Address, chainId uint64) (*big.Int, uint64, uint64, []*pool.UserOperation, error)
 	AddSignedUserOperation(userOp *pool.SignedUserOperation) error
+}
+
+type HisInterface interface {
 	GetAccountHis(user, account common.Address, page uint64) ([]types.AccountHistory, error)
-	SaveAccountHis(user, account common.Address, data types.AccountHistory) error
+	SaveAccountHis(user, account common.Address, data *types.AccountHistory) error
 }

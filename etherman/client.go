@@ -27,7 +27,7 @@ var (
 	ErrNotFound = errors.New("Not found")
 )
 
-type ethereumClient struct {
+type EthereumClient struct {
 	cfg            Network
 	chainID        chains.ChainId
 	ethClient      ethClientInterface
@@ -42,7 +42,7 @@ type ethereumClient struct {
 	auth   bind.TransactOpts
 }
 
-func NewClient(cfg Network) (*ethereumClient, error) {
+func NewClient(cfg Network) (*EthereumClient, error) {
 	ethClient, err := ethclient.Dial(cfg.Rpc)
 	if err != nil {
 		log.Errorf("chainID: %d, error connecting to %s: %+v", cfg.ChainId, cfg.Rpc, err)
@@ -64,7 +64,7 @@ func NewClient(cfg Network) (*ethereumClient, error) {
 		return nil, fmt.Errorf("chainID: %d, failed to init sync router: %v", cfg.ChainId, err)
 	}
 
-	return &ethereumClient{
+	return &EthereumClient{
 		cfg:            cfg,
 		chainID:        chains.ChainId(cfg.ChainId),
 		entryPointAddr: cfg.EntryPoint,
@@ -77,7 +77,7 @@ func NewClient(cfg Network) (*ethereumClient, error) {
 	}, nil
 }
 
-func (c *ethereumClient) GetEventByBlockRange(ctx context.Context, fromBlock uint64, toBlock *uint64) ([]Block, error) {
+func (c *EthereumClient) GetEventByBlockRange(ctx context.Context, fromBlock uint64, toBlock *uint64) ([]Block, error) {
 	query := ethereum.FilterQuery{
 		FromBlock: new(big.Int).SetUint64(fromBlock),
 		Addresses: []common.Address{c.entryPointAddr, c.aaFactoryAddr},
@@ -92,7 +92,7 @@ func (c *ethereumClient) GetEventByBlockRange(ctx context.Context, fromBlock uin
 	return blocks, nil
 }
 
-func (c *ethereumClient) readEvents(ctx context.Context, query ethereum.FilterQuery) ([]Block, error) {
+func (c *EthereumClient) readEvents(ctx context.Context, query ethereum.FilterQuery) ([]Block, error) {
 	logs, err := c.ethClient.FilterLogs(ctx, query)
 	if err != nil {
 		log.Error(err)
@@ -109,7 +109,7 @@ func (c *ethereumClient) readEvents(ctx context.Context, query ethereum.FilterQu
 	return blocks, nil
 }
 
-func (c *ethereumClient) processEvent(ctx context.Context, vLog types.Log, blocks *[]Block) error {
+func (c *EthereumClient) processEvent(ctx context.Context, vLog types.Log, blocks *[]Block) error {
 	switch vLog.Topics[0] {
 	case accountCreatedSignatureHash:
 		return c.accountCreateEvent(vLog, blocks)
@@ -122,7 +122,7 @@ func (c *ethereumClient) processEvent(ctx context.Context, vLog types.Log, block
 	return nil
 }
 
-func (c *ethereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) error {
+func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) error {
 	log.Info("AccountCreate event detected")
 	evt, err := c.aaFactory.ParseAccountCreated(vLog)
 	if err != nil {
@@ -156,7 +156,7 @@ func (c *ethereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) err
 	return nil
 }
 
-func (c *ethereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
+func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 	log.Info("Deposit event detected")
 	evt, err := c.entryPoint.ParseDepositTicketAdded(vLog)
 	if err != nil {
@@ -191,7 +191,7 @@ func (c *ethereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 	return nil
 }
 
-func (c *ethereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
+func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 	log.Info("Withdraw event detected")
 	evt, err := c.entryPoint.ParseWithdrawTicketAdded(vLog)
 	if err != nil {
@@ -234,11 +234,15 @@ func prepareBlock(vLog types.Log, t time.Time, fullBlock *types.Block) Block {
 	return block
 }
 
-func (c *ethereumClient) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
-	return c.ethClient.HeaderByNumber(ctx, number)
+func (c *EthereumClient) Cli() ethClientInterface {
+	return c.ethClient
 }
 
-func (c *ethereumClient) EthBlockByNumber(ctx context.Context, blockNumber uint64) (*types.Block, error) {
+func (c *EthereumClient) IsNeedSync() bool {
+	return !(c.cfg.IsSync == 0)
+}
+
+func (c *EthereumClient) EthBlockByNumber(ctx context.Context, blockNumber uint64) (*types.Block, error) {
 	block, err := c.ethClient.BlockByNumber(ctx, new(big.Int).SetUint64(blockNumber))
 	if err != nil {
 		if errors.Is(err, ethereum.NotFound) || err.Error() == "block does not exist in blockchain" {

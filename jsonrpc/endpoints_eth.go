@@ -6,22 +6,27 @@ import (
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
 	state_types "github.com/OAB/state/types"
+	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type EthEndpoints struct {
 	state types.StateInterface
+	his   types.HisInterface
 }
 
-func NewEthEndpoints(s types.StateInterface) *EthEndpoints {
-	return &EthEndpoints{s}
+func NewEthEndpoints(s types.StateInterface, his types.HisInterface) *EthEndpoints {
+	return &EthEndpoints{s, his}
 }
 
 func (e *EthEndpoints) SendUserOperation(signedUserOp *pool.SignedUserOperation) error {
 	if len(signedUserOp.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
 	}
-
+	if signedUserOp.Did == "" {
+		hashBytes, _ := poseidon.HashMessage(signedUserOp.Encode())
+		signedUserOp.Did = common.BytesToHash(poseidon.H4ToBytes(hashBytes)).Hex()
+	}
 	return e.state.AddSignedUserOperation(signedUserOp)
 }
 
@@ -51,7 +56,10 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 }
 
 func (e *EthEndpoints) ReportHis(user, account common.Address, data state_types.AccountHistory) error {
-	return e.state.SaveAccountHis(user, account, data)
+	data.Owner = user.Hex()
+	data.Account = account.Hex()
+	data.ID = data.UniqueID()
+	return e.his.SaveAccountHis(user, account, &data)
 }
 
 func (e *EthEndpoints) GetUserHistory(user, account common.Address, page uint64) (interface{}, error) {
@@ -59,5 +67,5 @@ func (e *EthEndpoints) GetUserHistory(user, account common.Address, page uint64)
 	if err != nil {
 		return nil, err
 	}
-	return e.state.GetAccountHis(user, account, page)
+	return e.his.GetAccountHis(user, account, page)
 }

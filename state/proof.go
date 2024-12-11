@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"github.com/OAB/etherman/contracts/EntryPoint"
+	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/pool"
 	"github.com/OAB/state/types"
 	"github.com/OAB/utils/log"
@@ -20,7 +21,8 @@ func (s *State) processBatch(batchContext *pool.BatchContext) error {
 	batch.SetOldStateRoot(common.BigToHash(s.tree.LastRoot()))
 
 	for _, userOperation := range batchContext.SignedUserOperations() {
-		log.Infof("Address: %s ,Nonce: %d ,ChainId %s ,OperationType: %d ,operationValue: %d ===============", userOperation.Owner, userOperation.Nonce, userOperation.ChainId.String(), userOperation.OperationType, userOperation.OperationValue)
+		log.Infof("Address: %s ,Nonce: %d ,ChainId %s ,OperationType: %d ,operationValue: %d ===============",
+			userOperation.Owner, userOperation.Nonce, userOperation.ChainId[userOperation.Step].String(), userOperation.OperationType, userOperation.OperationValue)
 
 		// balance
 		var balance big.Int
@@ -53,7 +55,7 @@ func (s *State) processBatch(batchContext *pool.BatchContext) error {
 
 		// nonce
 		var nonce big.Int
-		nonceU256, err := s.tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId.String())
+		nonceU256, err := s.tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId[userOperation.Step].String())
 		if err != nil {
 			return err
 		}
@@ -61,7 +63,7 @@ func (s *State) processBatch(batchContext *pool.BatchContext) error {
 		log.Infof("oldNonce: %d", &nonce)
 		nonce.Add(&nonce, big.NewInt(1))
 		log.Infof("newNonce: %d", &nonce)
-		_, err = s.tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId.String())
+		_, err = s.tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId[userOperation.Step].String())
 		if err != nil {
 			return err
 		}
@@ -90,7 +92,8 @@ func (s *State) executeBatch() (*ProofResult, error) {
 		if !ok {
 			return nil, nil
 		}
-		batches := EntryPoint.IEntryPointBatchData{}
+		batches := EntryPoint.BaseStructBatchData{}
+		extraInfo := EntryPoint.BaseStructChainsExecuteInfo{}
 		var suo []*pool.SignedUserOperation
 		for i := res.Number; i <= res.FinalNumber; i++ {
 			batch, err := s.storage.loadBatch(i)
@@ -100,10 +103,13 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			if batch == nil {
 				return nil, fmt.Errorf("batch(%d) no cache data", i)
 			}
-			if i == res.Number {
+			/*if i == res.Number {
 				batches.OldStateRoot = batch.OldStateRoot
 			} else if i == res.FinalNumber {
 				batches.NewStateRoot = batch.NewStateRoot
+			}*/
+			if i == res.FinalNumber {
+				extraInfo.NewStateRoot = batch.NewStateRoot
 			}
 			suo = append(suo, batch.BatchL2SrcData...)
 		}
@@ -112,32 +118,32 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			s.storage.VerifyBatchNumber = res.FinalNumber
 			return nil, nil
 		}
-		var puo []EntryPoint.PackedUserOperation
-		chainExtra := make(map[uint64]EntryPoint.IEntryPointChainExecuteExtra)
+		var puo []EntryPoint.BaseStructPackedUserOperation
+		chainExtra := make(map[uint64]EntryPoint.BaseStructChainExecuteExtra)
 		for _, op := range suo {
 			puo = append(puo, op.ToEntryPointOp())
-			fee, err := s.ethereum.EstimateGas(op.ChainId.Uint64(), op.CalculateGasUsed(), op.Encode())
+			fee, err := s.ethereum.EstimateGas(op.ChainId[op.Step].Uint64(), op.CalculateGasUsed(), []SyncRouter.BaseStructPackedUserOperation{op.ToSyncRouterOp()})
 			if err != nil {
 				return &res, err
 			}
-			if cee, ok := chainExtra[op.ChainId.Uint64()]; ok {
-				cee.ChainFee.Add(cee.ChainFee, fee)
-				cee.ChainUserOperationsNumber.Add(cee.ChainUserOperationsNumber, big.NewInt(1))
-				chainExtra[op.ChainId.Uint64()] = cee
+			log.Infof("EstimateGas fee: %d", fee.Uint64())
+			if cee, ok := chainExtra[op.ChainId[op.Step].Uint64()]; ok {
+				cee.ChainFee += fee.Uint64()
+				cee.ChainUserOperationsNumber++
+				chainExtra[op.ChainId[op.Step].Uint64()] = cee
 			} else {
-				chainExtra[op.ChainId.Uint64()] = EntryPoint.IEntryPointChainExecuteExtra{
-					ChainFee:                  fee,
-					ChainUserOperationsNumber: big.NewInt(1),
+				chainExtra[op.ChainId[op.Step].Uint64()] = EntryPoint.BaseStructChainExecuteExtra{
+					ChainFee:                  fee.Uint64(),
+					ChainUserOperationsNumber: 1,
 				}
 			}
 		}
-		extraInfo := EntryPoint.IEntryPointChainsExecuteInfo{}
 		for _, v := range chainExtra {
 			extraInfo.ChainExtra = append(extraInfo.ChainExtra, v)
 		}
 		batches.AccInputHash = batchHashData(suo)
 		batches.UserOperations = puo
-		tx, err := s.ethereum.UpdateEntryPointRoot(res.Proof, []EntryPoint.IEntryPointBatchData{batches}, extraInfo)
+		tx, err := s.ethereum.UpdateEntryPointRoot(res.Proof, []EntryPoint.BaseStructBatchData{batches}, extraInfo)
 		if err != nil {
 			return &res, err
 		}
@@ -148,8 +154,8 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			}
 		}
 		for _, op := range suo {
-			uoHis := types.ToUserOperationHis(tx.Hex(), *op.UserOperation)
-			err = s.SaveAccountHis(op.Owner, op.Sender, uoHis)
+			uoHis := types.ToUserOperationHis(op.Did, op.Owner.Hex(), op.Sender.Hex(), tx.Hex(), *op.UserOperation)
+			err = s.his.SaveAccountHis(op.Owner, op.Sender, &uoHis)
 			if err != nil {
 				log.Errorf("cache account(%s, %s) history error: %v", op.Owner, op.Sender, err)
 				continue
