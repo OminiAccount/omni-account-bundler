@@ -5,7 +5,7 @@ import (
 )
 
 type Config struct {
-	Networks []Network `mapstructure:"networks"`
+	Networks    []Network          `mapstructure:"networks"`
 }
 
 // KeystoreFileConfig has all the information needed to load a private key from a key store file

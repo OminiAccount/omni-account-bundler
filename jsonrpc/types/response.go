@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/OAB/pool"
-	"math/big"
 )
 
 const (
@@ -12,7 +11,7 @@ const (
 )
 
 type AccountInfo struct {
-	Balance        *big.Int
+	Balance        string
 	Nonce          uint64
 	LatestPage     uint64
 	UserOperations []*pool.UserOperation

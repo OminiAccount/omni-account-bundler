@@ -2,9 +2,6 @@ package pool
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/OAB/lib/common/hexutil"
-	"math/big"
 )
 
 func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
@@ -31,7 +28,7 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 		s.ChainId = (*hexutil.Big)(chainId)
 	}*/
 
-	if aux.MainChainGasPrice != "" {
+	/*if aux.MainChainGasPrice != "" {
 		mainChainGasPrice, ok := new(big.Int).SetString(aux.MainChainGasPrice, 0)
 		if !ok {
 			return fmt.Errorf("invalid MainChainGasPrice value: %s", aux.MainChainGasPrice)
@@ -45,7 +42,7 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 			return fmt.Errorf("invalid DestChainGasPrice value: %s", aux.DestChainGasPrice)
 		}
 		s.DestChainGasPrice = (*hexutil.Big)(destChainGasPrice)
-	}
+	}*/
 
 	//if aux.MaxPriorityFeePerGas != "" {
 	//	maxPriorityFeePerGas, ok := new(big.Int).SetString(aux.MaxPriorityFeePerGas, 0)

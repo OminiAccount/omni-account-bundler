@@ -16,6 +16,7 @@ const LevalDBNotFound = "leveldb: not found"
 type AccountCreateFunc func(acc AccountCreateData)
 type DepositFunc func(acc DepositData)
 type WithdrawFunc func(acc WithdrawData)
+type ExecOpFunc func(wt ExecOpData)
 
 type Synchronizer interface {
 	Sync()
@@ -33,10 +34,11 @@ type ClientSynchronizer struct {
 	acFunc AccountCreateFunc
 	dpFunc DepositFunc
 	wtFunc WithdrawFunc
+	eoFunc ExecOpFunc
 }
 
 func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumClient,
-	acFunc AccountCreateFunc, dpFunc DepositFunc, wtFunc WithdrawFunc) (Synchronizer, error) {
+	acFunc AccountCreateFunc, dpFunc DepositFunc, wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
 		storage:        db,
 		etherCli:       etherCli,
@@ -46,6 +48,7 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		acFunc:         acFunc,
 		dpFunc:         dpFunc,
 		wtFunc:         wtFunc,
+		eoFunc: 		eoFunc,
 	}
 	lastBlockSync, err := cliSync.storage.Get(cliSync.ChainKey())
 	if err != nil {

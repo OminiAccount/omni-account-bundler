@@ -6,8 +6,8 @@ import (
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
 	state_types "github.com/OAB/state/types"
-	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type EthEndpoints struct {
@@ -24,8 +24,8 @@ func (e *EthEndpoints) SendUserOperation(signedUserOp *pool.SignedUserOperation)
 		return fmt.Errorf("invalid signature")
 	}
 	if signedUserOp.Did == "" {
-		hashBytes, _ := poseidon.HashMessage(signedUserOp.Encode())
-		signedUserOp.Did = common.BytesToHash(poseidon.H4ToBytes(hashBytes)).Hex()
+		hashBytes := crypto.Keccak256Hash(signedUserOp.Encode())
+		signedUserOp.Did = hashBytes.Hex()
 	}
 	return e.state.AddSignedUserOperation(signedUserOp)
 }
@@ -38,6 +38,10 @@ func (e *EthEndpoints) SetBatchProofResult(result state.ProofResult) error {
 	return e.state.SetBatchProofResult(&result)
 }
 
+func (e *EthEndpoints) CreateUserAccount(user common.Address) interface{} {
+	return e.state.CreateAccount(user)
+}
+
 func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
 	return e.state.GetAccountsForUser(user)
 }
@@ -48,7 +52,7 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 		return nil, err
 	}
 	return types.AccountInfo{
-		Balance:        balance,
+		Balance:        balance.String(),
 		Nonce:          nonce + 1,
 		UserOperations: userOps,
 		LatestPage:     page,

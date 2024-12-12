@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/OAB/pool"
 	"github.com/OAB/state/types"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
@@ -134,6 +135,32 @@ func (h *HistoryManager) checkHis(ctx context.Context, his *types.AccountHistory
 
 func (h *HistoryManager) GetAccountHis(user, account common.Address, page uint64) ([]types.AccountHistory, error) {
 	return h.storage.loadUserHistory(account, page)
+}
+
+func (h *HistoryManager) UpdateAccountHis(tx string, op *pool.UserOperation) {
+	page, err := h.txMgr.GetHisAccIndex(op)
+	if err != nil || page < 0 {
+		log.Errorf("get history index failed, data: %+v, err: %+v", op, err)
+		return
+	}
+	hisPage, err := h.storage.loadUserHistory(op.Sender, uint64(page))
+	if err != nil {
+		log.Errorf("get history page failed, data: %+v, err: %+v", op, err)
+		return
+	}
+	for i, his := range hisPage {
+		if his.ID != op.Did {
+			continue
+		}
+		hisPage[i].TargetChain = op.InnerExec.ChainId.Uint64()
+		hisPage[i].TargetHash = tx
+		err = h.storage.cacheUserHistory(common.HexToAddress(his.Account), uint64(page), hisPage)
+		if err != nil {
+			log.Errorf("cache account(%s, %s) history error: %v", his.Owner, his.Account, err)
+		}
+		log.Infof("updateUserHistory success: %+v", hisPage)
+		break
+	}
 }
 
 func (h *HistoryManager) SaveAccountHis(owner, account common.Address, data *types.AccountHistory) error {
@@ -364,4 +391,29 @@ func (tm *HisInfra) IsExistHis(his *types.AccountHistory) bool {
 		return true
 	}
 	return false
+}
+
+func (tm *HisInfra) GetHisAccIndex(op *pool.UserOperation) (int64, error) {
+	tm.lock.Lock()
+	defer tm.lock.Unlock()
+	key := fmt.Sprintf(tm.HisAccIdxKey, op.Sender)
+	has, err := tm.state.storage.db.Has([]byte(key))
+	if err != nil {
+		return -1, err
+	}
+	if has {
+		data, err := tm.state.storage.db.Get([]byte(key))
+		if err != nil {
+			return -1, err
+		}
+		decodeData, err := msgpack.UnmarshalStruct[map[string]string](data)
+		if err != nil {
+			return -1, err
+		}
+		if page, ok := decodeData[op.Did]; ok {
+			return strconv.ParseInt(page, 10, 64)
+		}
+		return -1, nil
+	}
+	return -1, nil
 }

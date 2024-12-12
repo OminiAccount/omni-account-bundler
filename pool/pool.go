@@ -50,22 +50,30 @@ func (p *Pool) GetTicket(id string) *TicketFull {
 
 func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
-	log.Infof("Add a new sign userOperation, Owner: %s, sender: %s, nonce: %d, chainId: %+v", op.Owner.String(), op.Sender.String(), op.Nonce.Uint64(), op.ChainId)
+	log.Infof("Add a new sign userOperation: %+v", op)
 	p.storage.addUserOp(op)
 	p.mu.Unlock()
 	//p.CheckFlush()
 }
 
-func (p *Pool) CheckFlush() {
+func (p *Pool) AddStepUserOperation(op *SignedUserOperation) {
+	p.mu.Lock()
+	log.Infof("Add a new step userOperation: %+v", op)
+	p.storage.addUserOp(op)
+	p.mu.Unlock()
+	p.CheckFlush(true)
+}
+
+func (p *Pool) CheckFlush(flag bool) {
 	// If the flushInterval is not 0, check both maxOps and time interval
-	if p.cfg.FlushInterval != 0 {
+	if flag {
+		p.Flush()
+	} else if p.cfg.FlushInterval != 0 {
 		if uint64(len(p.storage.UserOps)) >= p.cfg.MaxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.FlushInterval) {
 			p.Flush()
 		}
-	} else {
-		if uint64(len(p.storage.UserOps)) >= p.cfg.MaxOps {
-			p.Flush()
-		}
+	} else if uint64(len(p.storage.UserOps)) >= p.cfg.MaxOps {
+		p.Flush()
 	}
 }
 
@@ -93,7 +101,7 @@ func (p *Pool) StartAutoFlush() {
 		for {
 			select {
 			case <-ticker.C:
-				p.CheckFlush()
+				p.CheckFlush(false)
 			case <-p.ctx.Done():
 				ticker.Stop()
 				return

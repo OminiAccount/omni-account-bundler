@@ -3,7 +3,6 @@ package pool
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 )
@@ -37,7 +36,7 @@ func CreateUserOps() []*SignedUserOperation {
 	var sus []*SignedUserOperation
 
 	// userOp for deposit 0.2 ether
-	userOpDeposit := UserOperation{
+	/*userOpDeposit := UserOperation{
 		OperationType:          1,
 		OperationValue:         0x2c68af0bb140000,
 		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
@@ -126,7 +125,7 @@ func CreateUserOps() []*SignedUserOperation {
 			sus = append(sus, &signedUserOperationCounter)
 		}
 
-	}
+	}*/
 
 	return sus
 }

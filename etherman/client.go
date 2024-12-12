@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ var (
 	accountCreatedSignatureHash      = crypto.Keccak256Hash([]byte("AccountCreated(address,address)"))
 	depositTicketAddedSignatureHash  = crypto.Keccak256Hash([]byte("DepositTicketAdded(bytes32,address,uint256,uint256)"))
 	withdrawTicketAddedSignatureHash = crypto.Keccak256Hash([]byte("WithdrawTicketAdded(address,uint256,uint256)"))
+	operationPhaseEventHash          = crypto.Keccak256Hash([]byte("UserOperationEvent(bytes32,address,address,uint8,bool,bool,uint256,uint256)"))
 
 	ErrNotFound = errors.New("Not found")
 )
@@ -37,9 +39,9 @@ type EthereumClient struct {
 	aaFactory      *SimpleAccountFactory.SimpleAccountFactory
 	syncRouterAddr common.Address
 	syncRouter     *SyncRouter.SyncRouter
-
+	lock sync.Mutex
 	sender common.Address
-	auth   bind.TransactOpts
+	opAuth bind.TransactOpts
 }
 
 func NewClient(cfg Network) (*EthereumClient, error) {
@@ -100,7 +102,7 @@ func (c *EthereumClient) readEvents(ctx context.Context, query ethereum.FilterQu
 	}
 	var blocks []Block
 	for _, vLog := range logs {
-		err := c.processEvent(ctx, vLog, &blocks)
+		err := c.processEvent(vLog, &blocks)
 		if err != nil {
 			log.Errorf("error processing event. Retrying... Error: %s. vLog: %+v", err.Error(), vLog)
 			return nil, err
@@ -109,7 +111,7 @@ func (c *EthereumClient) readEvents(ctx context.Context, query ethereum.FilterQu
 	return blocks, nil
 }
 
-func (c *EthereumClient) processEvent(ctx context.Context, vLog types.Log, blocks *[]Block) error {
+func (c *EthereumClient) processEvent(vLog types.Log, blocks *[]Block) error {
 	switch vLog.Topics[0] {
 	case accountCreatedSignatureHash:
 		return c.accountCreateEvent(vLog, blocks)
@@ -117,6 +119,8 @@ func (c *EthereumClient) processEvent(ctx context.Context, vLog types.Log, block
 		return c.depositEvent(vLog, blocks)
 	case withdrawTicketAddedSignatureHash:
 		return c.withdrawEvent(vLog, blocks)
+	case operationPhaseEventHash:
+		return c.execOpEvent(vLog, blocks)
 	}
 	log.Infof("Event not registered: %+v", vLog)
 	return nil
@@ -129,10 +133,7 @@ func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) err
 		return err
 	}
 
-	ac := AccountCreateData{
-		Owner:   evt.Owner,
-		Account: evt.Account,
-	}
+	ac := ToAccountCreateData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
 		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
@@ -163,11 +164,7 @@ func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 		return err
 	}
 
-	dp := DepositData{
-		Did:     string(evt.Did[:]),
-		Account: evt.Account,
-		Amount:  evt.Amount,
-	}
+	dp := ToDepositData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
 		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
@@ -198,10 +195,7 @@ func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 		return err
 	}
 
-	wt := WithdrawData{
-		Account: evt.Account,
-		Amount:  evt.Amount,
-	}
+	wt := ToWithdrawData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
 		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
@@ -220,6 +214,37 @@ func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 	or := Order{
 		Name: WithdrawTicketAddedOrder,
 		Pos:  len((*blocks)[len(*blocks)-1].wt) - 1,
+	}
+	(*blocks)[len(*blocks)-1].or = append((*blocks)[len(*blocks)-1].or, or)
+	return nil
+}
+
+func (c *EthereumClient) execOpEvent(vLog types.Log, blocks *[]Block) error {
+	log.Info("Execop event detected")
+	evt, err := c.entryPoint.ParseUserOperationEvent(vLog)
+	if err != nil {
+		return err
+	}
+	log.Infof("%+v", evt)
+	eo := ToExecOpData(evt)
+	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
+		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
+		if err != nil {
+			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
+		}
+		t := time.Unix(int64(fullBlock.Time()), 0)
+		block := prepareBlock(vLog, t, fullBlock)
+		block.eo = append(block.eo, eo)
+		*blocks = append(*blocks, block)
+	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
+		(*blocks)[len(*blocks)-1].eo = append((*blocks)[len(*blocks)-1].eo, eo)
+	} else {
+		log.Error("Error processing Withdraw event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		return fmt.Errorf("error processing Withdraw event")
+	}
+	or := Order{
+		Name: ExecOpOrder,
+		Pos:  len((*blocks)[len(*blocks)-1].eo) - 1,
 	}
 	(*blocks)[len(*blocks)-1].or = append((*blocks)[len(*blocks)-1].or, or)
 	return nil

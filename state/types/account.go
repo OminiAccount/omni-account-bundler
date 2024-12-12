@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OAB/pool"
-	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"maps"
 	"math/big"
 	"sync"
@@ -44,7 +44,7 @@ type AccountHistory struct {
 	ID          string        `json:"id"`
 	Owner       string        `json:"owner"`
 	Account     string        `json:"account"`
-	OrderType   uint8           `json:"orderType"`
+	OrderType   uint8         `json:"orderType"`
 	From        HistoryDetail `json:"from"`
 	To          HistoryDetail `json:"to"`
 	SourceChain uint64        `json:"sourceChain"`
@@ -57,39 +57,29 @@ type AccountHistory struct {
 
 func (s AccountHistory) UniqueID() string {
 	data, _ := json.Marshal(s)
-	hashBytes, _ := poseidon.HashMessage(data)
-	return common.BytesToHash(poseidon.H4ToBytes(hashBytes)).Hex()
+	hashBytes := crypto.Keccak256Hash(data)
+	return hashBytes.Hex()
 }
 
-func ToUserOperationHis(id, owner, account, tx string, op pool.UserOperation) AccountHistory {
+func ToUserOperationHis(tx string, op *pool.UserOperation) AccountHistory {
 	uoHis := AccountHistory{
-		ID:        id,
-		Owner:     owner,
-		Account:   account,
-		OrderType: 0,
+		ID:        op.Did,
+		Owner:     op.Owner.Hex(),
+		Account:   op.Sender.Hex(),
+		OrderType: op.OperationType,
 		From: HistoryDetail{
 			Address: op.Sender.Hex(),
 			Value:   op.OperationValue.String(),
 		},
+		SourceChain: op.Exec.ChainId.Uint64(),
+		SourceHash:  tx,
 		To: HistoryDetail{
 			Address: op.Sender.Hex(),
 			Value:   op.OperationValue.String(),
 		},
-		SourceChain: op.ChainId[0].Uint64(),
-		SourceHash:  tx,
+		TargetChain: op.Exec.ChainId.Uint64(),
+		TargetHash:  tx,
 		Time:        time.Now().Unix(),
-	}
-	if len(op.ChainId) > 1 {
-		uoHis.TargetChain = op.ChainId[1].Uint64()
-	} else {
-		uoHis.TargetChain = op.ChainId[0].Uint64()
-	}
-	if op.OperationType == pool.DepositAction {
-		uoHis.OrderType = 0
-		uoHis.TargetChain = 28516
-	} else if op.OperationType == pool.WithdrawAction {
-		uoHis.OrderType = 1
-		uoHis.SourceChain = 28516
 	}
 	return uoHis
 }
@@ -129,7 +119,7 @@ func (info *AccountInfo) remainingGas(operation *pool.UserOperation) bool {
 }
 
 func (info *AccountInfo) gasOperation(operation *pool.UserOperation) bool {
-	value := new(big.Int).SetUint64(operation.OperationValue.Uint64())
+	value := operation.OperationValue.ToInt()
 	switch operation.OperationType {
 	case pool.DepositAction:
 		info.Gas.Add(info.Gas, value)
@@ -186,8 +176,8 @@ func (u *UserAccount) GetAccount(user, account common.Address) (*AccountInfo, er
 	return &accountInfo, nil
 }
 
-func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperation) error {
-	accountInfo, err := u.GetAccount(signedUserOp.Owner, signedUserOp.Sender)
+func (u *UserAccount) AddSignedUserOperation(suo *pool.SignedUserOperation) error {
+	accountInfo, err := u.GetAccount(suo.Owner, suo.Sender)
 	if err != nil {
 		return err
 	}
@@ -200,36 +190,41 @@ func (u *UserAccount) AddSignedUserOperation(signedUserOp *pool.SignedUserOperat
 	var opErr error
 
 	// deposit/withdraw
-	if signedUserOp.UserOperation.IsGasOperation() {
-		if success := accountInfo.gasOperation(signedUserOp.UserOperation); success == false {
-			opErr = fmt.Errorf("deposit or withdraw operation failed for user:%s", signedUserOp.Owner)
+	if suo.UserOperation.IsGasOperation() {
+		if success := accountInfo.gasOperation(suo.UserOperation); success == false {
+			opErr = fmt.Errorf("deposit or withdraw operation failed for user:%s", suo.Owner)
 		}
 	}
 
 	// check gas
-	if opErr == nil && !accountInfo.remainingGas(signedUserOp.UserOperation) {
+	if opErr == nil && !accountInfo.remainingGas(suo.UserOperation) {
 		opErr = fmt.Errorf("insufficient gas balance")
 	}
 
 	// nonce ++
 	if opErr == nil {
-		accountInfo.increaseNonce(signedUserOp.ChainId[0].Uint64())
-		expectNonce := accountInfo.Nonce[signedUserOp.ChainId[0].Uint64()]
-		if expectNonce != signedUserOp.Nonce.Uint64() {
-			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", signedUserOp.Owner, expectNonce, signedUserOp.Nonce.Uint64())
+		accountInfo.increaseNonce(suo.Exec.ChainId.Uint64())
+		expectNonce := accountInfo.Nonce[suo.Exec.ChainId.Uint64()]
+		if expectNonce != suo.Exec.Nonce.Uint64() {
+			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", suo.Owner, expectNonce, suo.Exec.Nonce.Uint64())
+		}
+		accountInfo.increaseNonce(suo.InnerExec.ChainId.Uint64())
+		expectNonce = accountInfo.Nonce[suo.InnerExec.ChainId.Uint64()]
+		if expectNonce != suo.InnerExec.Nonce.Uint64() {
+			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", suo.Owner, expectNonce, suo.InnerExec.Nonce.Uint64())
 		}
 	}
 
 	if opErr == nil {
-		accountInfo.addUserOperations(signedUserOp.UserOperation)
+		accountInfo.addUserOperations(suo.UserOperation)
 	} else {
 		// If an error occurs, restore the original state
-		(*u)[signedUserOp.Owner][signedUserOp.Sender] = *originalAccountInfo
+		(*u)[suo.Owner][suo.Sender] = *originalAccountInfo
 		return opErr
 	}
 
 	// recopy
-	(*u)[signedUserOp.Owner][signedUserOp.Sender] = *accountInfo
+	(*u)[suo.Owner][suo.Sender] = *accountInfo
 	return nil
 }
 

@@ -3,6 +3,7 @@ package synchronizer
 import (
 	"context"
 	"github.com/OAB/etherman"
+	"github.com/OAB/pool"
 	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/log"
@@ -66,11 +67,28 @@ func (s *Synchronizer) Start() {
 	wtFunc := func(wt etherman.WithdrawData) {
 		log.Info("Synchronize to a new withdraw ticket，data: %+v", wt)
 	}
+	eoFunc := func(eo etherman.ExecOpData) {
+		if eo.Phase != pool.PhaseSecond || !eo.InnerExec || !eo.Success {
+			return
+		}
+		log.Info("Synchronize to a new exec op evnet，data: %+v", eo)
+		uop, err := s.state.GetSignedUserOp(eo.Owner, eo.Account, eo.ID)
+		if err != nil {
+			log.Errorf("get signedUserOperation by id, error: %+v", err)
+			return
+		}
+		if uop.InnerExec.ChainId < 1 || uop.InnerExec.CallData.String() == "0x" {
+			log.Warnf("no inner exec data, %+v", uop)
+			return
+		}
+		uop.Phase = pool.PhaseSecond
+		s.pool.AddStepUserOperation(uop)
+	}
 	for _, cli := range s.ether.GetChains() {
 		if !cli.IsNeedSync() {
 			continue
 		}
-		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, dpFunc, wtFunc)
+		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, dpFunc, wtFunc, eoFunc)
 		if err != nil {
 			log.Fatal(err.Error())
 		}

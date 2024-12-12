@@ -20,50 +20,65 @@ func (s *State) processBatch(batchContext *pool.BatchContext) error {
 	// Set old smt root
 	batch.SetOldStateRoot(common.BigToHash(s.tree.LastRoot()))
 
-	for _, userOperation := range batchContext.SignedUserOperations() {
-		log.Infof("Address: %s ,Nonce: %d ,ChainId %s ,OperationType: %d ,operationValue: %d ===============",
-			userOperation.Owner, userOperation.Nonce, userOperation.ChainId[userOperation.Step].String(), userOperation.OperationType, userOperation.OperationValue)
+	for _, uo := range batchContext.SignedUserOperations() {
+		log.Infof("operationValue: %+v ===============", uo)
 
+		if uo.Phase != pool.PhaseFirst {
+			continue
+		}
 		// balance
 		var balance big.Int
-		balanceU256, err := s.tree.GetAccountBalance(userOperation.Sender)
+		balanceU256, err := s.tree.GetAccountBalance(uo.Sender)
 		if err != nil {
 			return err
 		}
 		balance.SetBytes(balanceU256.Bytes())
 		log.Infof("oldBalance: %d", &balance)
-		operationValue := new(big.Int).SetUint64(userOperation.OperationValue.Uint64())
 
-		if userOperation.OperationType == 1 {
-			log.Infof("balance %d + operationValue %d", &balance, operationValue)
-			balance.Add(&balance, operationValue)
-		} else if userOperation.OperationType == 2 {
-			if balance.Cmp(operationValue) < 0 {
-				log.Infof("current account balance %s is insufficient to withdraw %s", &balance, operationValue)
+		if uo.OperationType == 1 {
+			log.Infof("balance %d + operationValue %s", &balance, uo.OperationValue.String())
+			balance.Add(&balance, uo.OperationValue.ToInt())
+		} else if uo.OperationType == 2 {
+			if balance.Cmp(uo.OperationValue.ToInt()) < 0 {
+				log.Infof("current account balance %s is insufficient to withdraw %s", &balance, uo.OperationValue.String())
 			}
-			log.Infof("balance %d - operationValue %d", &balance, operationValue.Uint64())
-			balance.Sub(&balance, operationValue)
+			log.Infof("balance %d - operationValue %s", &balance, uo.OperationValue.String())
+			balance.Sub(&balance, uo.OperationValue.ToInt())
 		}
 
-		log.Infof("balance %d - CalculateGasUsed %d", &balance, userOperation.CalculateGasUsed())
-		balance.Sub(&balance, userOperation.CalculateGasUsed())
+		log.Infof("balance %d - CalculateGasUsed %s", &balance, uo.CalculateGasUsed())
+		balance.Sub(&balance, uo.CalculateGasUsed())
 
-		if _, err = s.tree.SetAccountBalance(userOperation.Sender.String(), &balance); err != nil {
+		if _, err = s.tree.SetAccountBalance(uo.Sender.String(), &balance); err != nil {
 			return err
 		}
 		log.Infof("newBalance: %d", &balance)
 
 		// nonce
 		var nonce big.Int
-		nonceU256, err := s.tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId[userOperation.Step].String())
+		nonceU256, err := s.tree.GetAccountNonce(uo.Sender, uo.Exec.ChainId.String())
 		if err != nil {
 			return err
 		}
 		nonce.SetBytes(nonceU256.Bytes())
-		log.Infof("oldNonce: %d", &nonce)
+		log.Infof("phase first oldNonce: %d", &nonce)
 		nonce.Add(&nonce, big.NewInt(1))
-		log.Infof("newNonce: %d", &nonce)
-		_, err = s.tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId[userOperation.Step].String())
+		log.Infof("phase first newNonce: %d", &nonce)
+		_, err = s.tree.SetAccountNonce(uo.Sender.String(), &nonce, uo.Exec.ChainId.String())
+		if err != nil {
+			return err
+		}
+
+		var nonce2 big.Int
+		nonceU256, err = s.tree.GetAccountNonce(uo.Sender, uo.InnerExec.ChainId.String())
+		if err != nil {
+			return err
+		}
+		nonce2.SetBytes(nonceU256.Bytes())
+		log.Infof("phase second oldNonce: %d", &nonce2)
+		nonce2.Add(&nonce2, big.NewInt(1))
+		log.Infof("phase second newNonce: %d", &nonce2)
+		_, err = s.tree.SetAccountNonce(uo.Sender.String(), &nonce2, uo.InnerExec.ChainId.String())
 		if err != nil {
 			return err
 		}
@@ -122,17 +137,21 @@ func (s *State) executeBatch() (*ProofResult, error) {
 		chainExtra := make(map[uint64]EntryPoint.BaseStructChainExecuteExtra)
 		for _, op := range suo {
 			puo = append(puo, op.ToEntryPointOp())
-			fee, err := s.ethereum.EstimateGas(op.ChainId[op.Step].Uint64(), op.CalculateGasUsed(), []SyncRouter.BaseStructPackedUserOperation{op.ToSyncRouterOp()})
+			chainID := op.Exec.ChainId
+			if op.Phase == pool.PhaseSecond {
+				chainID = op.InnerExec.ChainId
+			}
+			fee, err := s.ethereum.EstimateGas(chainID.Uint64(), op.CalculateGasUsed(), []SyncRouter.BaseStructPackedUserOperation{op.ToSyncRouterOp()})
 			if err != nil {
 				return &res, err
 			}
 			log.Infof("EstimateGas fee: %d", fee.Uint64())
-			if cee, ok := chainExtra[op.ChainId[op.Step].Uint64()]; ok {
+			if cee, ok := chainExtra[chainID.Uint64()]; ok {
 				cee.ChainFee += fee.Uint64()
 				cee.ChainUserOperationsNumber++
-				chainExtra[op.ChainId[op.Step].Uint64()] = cee
+				chainExtra[chainID.Uint64()] = cee
 			} else {
-				chainExtra[op.ChainId[op.Step].Uint64()] = EntryPoint.BaseStructChainExecuteExtra{
+				chainExtra[chainID.Uint64()] = EntryPoint.BaseStructChainExecuteExtra{
 					ChainFee:                  fee.Uint64(),
 					ChainUserOperationsNumber: 1,
 				}
@@ -154,7 +173,11 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			}
 		}
 		for _, op := range suo {
-			uoHis := types.ToUserOperationHis(op.Did, op.Owner.Hex(), op.Sender.Hex(), tx.Hex(), *op.UserOperation)
+			if op.Phase == pool.PhaseSecond {
+				s.his.UpdateAccountHis(tx.Hex(), op.UserOperation)
+				continue
+			}
+			uoHis := types.ToUserOperationHis(tx.Hex(), op.UserOperation)
 			err = s.his.SaveAccountHis(op.Owner, op.Sender, &uoHis)
 			if err != nil {
 				log.Errorf("cache account(%s, %s) history error: %v", op.Owner, op.Sender, err)

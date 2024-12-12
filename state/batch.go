@@ -4,13 +4,9 @@ import (
 	"errors"
 	"github.com/OAB/pool"
 	"github.com/OAB/utils/log"
-	"github.com/OAB/utils/packutils"
 	"github.com/OAB/utils/poseidon"
-	"math/big"
-
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -68,14 +64,9 @@ func encodeCircuitInput(sus []*pool.SignedUserOperation) []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, byte(len(sus)))
 	for _, su := range sus {
-		encodeBytes = append(encodeBytes, su.PackOperation()...)
-		encodeBytes = append(encodeBytes, common.LeftPadBytes(su.Sender.Bytes(), 32)...)
-		encodeBytes = append(encodeBytes, su.PackOpInfo()...)
-		encodeBytes = append(encodeBytes, crypto.Keccak256(su.CallData)...)
-		encodeBytes = append(encodeBytes, su.PackChainGasLimit()...)
-		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(su.ZkVerificationGasLimit)), 32)...)
-		encodeBytes = append(encodeBytes, su.PackChainGasPrice()...)
-		encodeBytes = append(encodeBytes, su.Signature...)
+		suByte := su.Encode()
+		suByte = append(suByte, su.Signature...)
+		encodeBytes = append(encodeBytes, suByte...)
 	}
 
 	return encodeBytes
@@ -86,9 +77,9 @@ func decodeCircuitInput(val []byte) []*pool.SignedUserOperation {
 		log.Error("decodeCircuitInput param length short")
 		return nil
 	}
-	l := val[0]
+	//l := val[0]
 	var sus []*pool.SignedUserOperation
-	for i := 0; i < len(val); {
+	/*for i := 0; i < len(val); {
 		if len(val) < (i + opLength) {
 			break
 		}
@@ -137,7 +128,7 @@ func decodeCircuitInput(val []byte) []*pool.SignedUserOperation {
 	}
 	if len(sus) != int(l) {
 		log.Warn("source data decode length mismatch")
-	}
+	}*/
 	return sus
 }
 
