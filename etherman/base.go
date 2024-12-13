@@ -3,6 +3,7 @@ package etherman
 import (
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SimpleAccountFactory"
+	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -53,6 +54,7 @@ type Block struct {
 }
 
 type AccountCreateData struct {
+	ChainID chains.ChainId
 	Account common.Address
 	Owner   common.Address
 }

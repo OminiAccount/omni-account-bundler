@@ -1,7 +1,6 @@
 package etherman
 
 import (
-	"context"
 	"fmt"
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SyncRouter"
@@ -13,10 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
-	"sync"
 )
 
 const SaltKey = "%d-salt"
+const VizingChain = 28516
 
 type EtherMan struct {
 	chainsClient map[chains.ChainId]*EthereumClient
@@ -55,7 +54,7 @@ func (ether *EtherMan) GetChainCli(c chains.ChainId) *EthereumClient {
 }
 
 func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperations []SyncRouter.BaseStructPackedUserOperation) (*big.Int, error) {
-	etherCli := ether.chainsClient[0]
+	etherCli := ether.chainsClient[VizingChain]
 	opts := new(bind.CallOpts)
 	opts.From = etherCli.sender
 	log.Infof("EstimateGas destChainId: %d, destContract: %s, userOperations: %+v",
@@ -70,23 +69,23 @@ func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperatio
 }
 
 func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []EntryPoint.BaseStructBatchData, extraInfo EntryPoint.BaseStructChainsExecuteInfo) (common.Hash, error) {
-	etherCli := ether.chainsClient[0]
+	etherCli := ether.chainsClient[VizingChain]
 	opts := etherCli.opAuth
-	nonce, err := etherCli.ethClient.NonceAt(context.Background(), opts.From, nil)
+	/*nonce, err := etherCli.ethClient.NonceAt(context.Background(), opts.From, nil)
 	if err != nil {
 		log.Errorf("get nonce, error: %+v", err)
 		return common.Hash{}, err
 	}
 	opts.Nonce = big.NewInt(0).SetUint64(nonce)
-	//gasPrice, err := etherCli.ethClient.SuggestGasPrice(context.Background())
-	//if err != nil {
-	//	ether.logger.Error("get SuggestGasPrice", "error", err.Error())
-	//	return nil, err
-	//}
-	//opts.GasPrice = gasPrice
-	//opts.GasLimit = uint64(47860)
-	//opts.Value = big.NewInt(0)
-
+	gasPrice, err := etherCli.ethClient.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Errorf("get SuggestGasPrice, err: %+v", err)
+		return common.Hash{}, err
+	}*/
+	opts.Nonce = nil
+	opts.GasPrice = nil
+	opts.GasLimit = 0
+	opts.Value = big.NewInt(0)
 	extraInfo.Beneficiary = etherCli.sender
 	log.Infof("VerifyBatches proof: %s, batches: %+v, extraInfo: %+v", proof.String(), batches, extraInfo)
 	tx, err := etherCli.entryPoint.VerifyBatches(&opts, proof, batches, extraInfo)
@@ -97,59 +96,54 @@ func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []Entry
 	return tx.Hash(), nil
 }
 
-func (ether *EtherMan) CreateAccount(user common.Address) *common.Address {
-	etherCli := ether.chainsClient[0]
-	etherCli.lock.Lock()
+func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint64) {
+	ccli := ether.chainsClient[VizingChain]
+	ccli.lock.Lock()
+	defer ccli.lock.Unlock()
 	var salt uint64
-	chainSaltKey := fmt.Sprintf(SaltKey, etherCli.chainID)
+	chainSaltKey := fmt.Sprintf(SaltKey, uint64(ccli.chainID))
 	has, err := ether.db.Has([]byte(chainSaltKey))
 	if err != nil {
 		log.Errorf("[CreateAccount] read db err: %+v", err)
-		etherCli.lock.Unlock()
-		return nil
+		return nil, salt
 	}
 	if has {
 		data, err := ether.db.Get([]byte(chainSaltKey))
 		if err != nil {
 			log.Errorf("[CreateAccount] from db get data err: %+v", err)
-			etherCli.lock.Unlock()
-			return nil
+			return nil, salt
 		}
 		salt = packutils.BytesToUint64(data)
 	}
+	log.Infof("[CreateAccount] chainID: %d, salt: %d", ccli.chainID, salt)
 	opts := new(bind.CallOpts)
-	opts.From = etherCli.sender
-	adr, err := etherCli.aaFactory.GetAccountAddress(opts, user, big.NewInt(0).SetUint64(salt))
+	opts.From = ccli.sender
+	adr, err := ccli.aaFactory.GetAccountAddress(opts, user, big.NewInt(0).SetUint64(salt))
 	if err != nil {
 		log.Errorf("get create account err: %+v", err)
-		etherCli.lock.Unlock()
-		return nil
+		return nil, salt
 	}
 	err = ether.db.Put([]byte(chainSaltKey), packutils.Uint64ToBytes(salt))
 	if err != nil {
-		log.Errorf("put key to db err: %+v", err)
-		etherCli.lock.Unlock()
-		return nil
+		log.Errorf("put salt key to db err: %+v", err)
+		return nil, salt
 	}
-	etherCli.lock.Unlock()
 	for _, cli := range ether.chainsClient {
 		go func(c *EthereumClient) {
 			c.lock.Lock()
 			defer c.lock.Unlock()
-			nonce, err := c.ethClient.NonceAt(context.Background(), opts.From, nil)
+			c.opAuth.Nonce = nil
+			c.opAuth.GasPrice = nil
+			c.opAuth.GasLimit = 0
+			c.opAuth.Value = big.NewInt(0)
+			tx, err := c.aaFactory.CreateAccount(&c.opAuth, user, big.NewInt(0).SetUint64(salt))
 			if err != nil {
-				log.Errorf("chain: %d, user: %s, get nonce, error: %+v", c.chainID, user, err)
-				return
-			}
-			c.opAuth.Nonce = big.NewInt(0).SetUint64(nonce)
-			tx, err := c.aaFactory.CreateAccount(&c.opAuth, user, salt)
-			if err != nil {
+				// TODO handler error
 				log.Errorf("chain: %d, user: %s, create account err: %+v", c.chainID, user, err)
 				return
 			}
 			log.Infof("create account success, chain: %d, user: %s, tx: %s", c.chainID, user, tx.Hash())
 		}(cli)
 	}
-	// set account
-	return &adr
+	return &adr, salt
 }

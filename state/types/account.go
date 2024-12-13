@@ -137,6 +137,7 @@ func (info *AccountInfo) gasOperation(operation *pool.UserOperation) bool {
 type AccountMapping struct {
 	User    common.Address
 	Account common.Address
+	Salt uint64
 }
 
 func NewUserAccount() *UserAccount {
@@ -229,7 +230,7 @@ func (u *UserAccount) AddSignedUserOperation(suo *pool.SignedUserOperation) erro
 }
 
 // GetAccountsForUser Iterate and print all account information for a given user
-func (u *UserAccount) GetAccountsForUser(user common.Address) *[]common.Address {
+func (u *UserAccount) GetAccountsForUser(user common.Address) map[common.Address]AccountInfo {
 	Lock.RLock()
 	defer Lock.RUnlock()
 
@@ -238,10 +239,5 @@ func (u *UserAccount) GetAccountsForUser(user common.Address) *[]common.Address 
 		return nil
 	}
 
-	var accounts []common.Address
-	for account := range accountsInfo {
-		accounts = append(accounts, account)
-	}
-
-	return &accounts
+	return accountsInfo
 }

@@ -52,7 +52,7 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 	//	s.MaxPriorityFeePerGas = (*hexutil.Big)(maxPriorityFeePerGas)
 	//}
 
-	s.RecoverAddress()
+	//s.RecoverAddress()
 
 	return nil
 }

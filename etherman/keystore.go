@@ -17,7 +17,7 @@ func (ether *EtherMan) LoadAuthFromKeyStore(path, password string, chainID uint6
 		return nil, nil, err
 	}
 
-	log.Infof("loaded authorization for address: %s", auth.From.String())
+	log.Infof("chainID: %d, loaded authorization for address: %s", chainID, auth.From.String())
 	return &auth, pk, nil
 }
 

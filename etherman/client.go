@@ -39,9 +39,9 @@ type EthereumClient struct {
 	aaFactory      *SimpleAccountFactory.SimpleAccountFactory
 	syncRouterAddr common.Address
 	syncRouter     *SyncRouter.SyncRouter
-	lock sync.Mutex
-	sender common.Address
-	opAuth bind.TransactOpts
+	sender         common.Address
+	opAuth         bind.TransactOpts
+	lock           sync.Mutex
 }
 
 func NewClient(cfg Network) (*EthereumClient, error) {
@@ -104,8 +104,9 @@ func (c *EthereumClient) readEvents(ctx context.Context, query ethereum.FilterQu
 	for _, vLog := range logs {
 		err := c.processEvent(vLog, &blocks)
 		if err != nil {
-			log.Errorf("error processing event. Retrying... Error: %s. vLog: %+v", err.Error(), vLog)
-			return nil, err
+			log.Errorf("chainID: %d, processing event error: %s. vLog: %+v", c.chainID, err.Error(), vLog)
+			//return nil, err
+			continue
 		}
 	}
 	return blocks, nil
@@ -122,18 +123,19 @@ func (c *EthereumClient) processEvent(vLog types.Log, blocks *[]Block) error {
 	case operationPhaseEventHash:
 		return c.execOpEvent(vLog, blocks)
 	}
-	log.Infof("Event not registered: %+v", vLog)
+	log.Infof("chainID: %d, Event not registered: %+v", c.chainID, vLog)
 	return nil
 }
 
 func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) error {
-	log.Info("AccountCreate event detected")
+	log.Infof("chainID: %d, AccountCreate event detected", c.chainID)
 	evt, err := c.aaFactory.ParseAccountCreated(vLog)
 	if err != nil {
 		return err
 	}
 
 	ac := ToAccountCreateData(evt)
+	ac.ChainID = c.chainID
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
 		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
@@ -146,7 +148,8 @@ func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) err
 	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
 		(*blocks)[len(*blocks)-1].ac = append((*blocks)[len(*blocks)-1].ac, ac)
 	} else {
-		log.Error("Error processing accountCreate event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		log.Errorf("chainID: %d, Error processing accountCreate event. BlockHash: %s. BlockNumber: %d",
+			c.chainID, vLog.BlockHash, vLog.BlockNumber)
 		return fmt.Errorf("error processing accountCreate event")
 	}
 	or := Order{
@@ -158,7 +161,7 @@ func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) err
 }
 
 func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
-	log.Info("Deposit event detected")
+	log.Infof("chainID: %d, Deposit event detected", c.chainID)
 	evt, err := c.entryPoint.ParseDepositTicketAdded(vLog)
 	if err != nil {
 		return err
@@ -177,7 +180,8 @@ func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
 		(*blocks)[len(*blocks)-1].dp = append((*blocks)[len(*blocks)-1].dp, dp)
 	} else {
-		log.Error("Error processing deposit event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		log.Errorf("chainID: %d, Error processing deposit event. BlockHash: %s, . BlockNumber: %d",
+			c.chainID, vLog.BlockHash, vLog.BlockNumber)
 		return fmt.Errorf("error processing deposit event")
 	}
 	or := Order{
@@ -189,7 +193,7 @@ func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 }
 
 func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
-	log.Info("Withdraw event detected")
+	log.Infof("chainID: %d, Withdraw event detected", c.chainID)
 	evt, err := c.entryPoint.ParseWithdrawTicketAdded(vLog)
 	if err != nil {
 		return err
@@ -208,7 +212,8 @@ func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
 		(*blocks)[len(*blocks)-1].wt = append((*blocks)[len(*blocks)-1].wt, wt)
 	} else {
-		log.Error("Error processing Withdraw event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		log.Errorf("chainID: %d, Error processing Withdraw event. BlockHash: %s. BlockNumber: %d",
+			c.chainID, vLog.BlockHash, vLog.BlockNumber)
 		return fmt.Errorf("error processing Withdraw event")
 	}
 	or := Order{
@@ -220,7 +225,7 @@ func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 }
 
 func (c *EthereumClient) execOpEvent(vLog types.Log, blocks *[]Block) error {
-	log.Info("Execop event detected")
+	log.Infof("chainID: %d, Execop event detected", c.chainID)
 	evt, err := c.entryPoint.ParseUserOperationEvent(vLog)
 	if err != nil {
 		return err
@@ -239,7 +244,8 @@ func (c *EthereumClient) execOpEvent(vLog types.Log, blocks *[]Block) error {
 	} else if (*blocks)[len(*blocks)-1].BlockHash == vLog.BlockHash && (*blocks)[len(*blocks)-1].BlockNumber == vLog.BlockNumber {
 		(*blocks)[len(*blocks)-1].eo = append((*blocks)[len(*blocks)-1].eo, eo)
 	} else {
-		log.Error("Error processing Withdraw event. BlockHash:", vLog.BlockHash, ". BlockNumber: ", vLog.BlockNumber)
+		log.Errorf("chainID: %d, Error processing Withdraw event. BlockHash: %s. BlockNumber: %d",
+			c.chainID, vLog.BlockHash, vLog.BlockNumber)
 		return fmt.Errorf("error processing Withdraw event")
 	}
 	or := Order{

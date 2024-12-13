@@ -6,8 +6,8 @@ import (
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
 	state_types "github.com/OAB/state/types"
+	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 type EthEndpoints struct {
@@ -20,12 +20,9 @@ func NewEthEndpoints(s types.StateInterface, his types.HisInterface) *EthEndpoin
 }
 
 func (e *EthEndpoints) SendUserOperation(signedUserOp *pool.SignedUserOperation) error {
+	log.Infof("[receive op] %+v", signedUserOp.UserOperation)
 	if len(signedUserOp.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
-	}
-	if signedUserOp.Did == "" {
-		hashBytes := crypto.Keccak256Hash(signedUserOp.Encode())
-		signedUserOp.Did = hashBytes.Hex()
 	}
 	return e.state.AddSignedUserOperation(signedUserOp)
 }
@@ -39,23 +36,27 @@ func (e *EthEndpoints) SetBatchProofResult(result state.ProofResult) error {
 }
 
 func (e *EthEndpoints) CreateUserAccount(user common.Address) interface{} {
+	adr, _ := e.state.GetAccountInfo(user)
+	if adr != nil {
+		return fmt.Errorf("account already exist")
+	}
 	return e.state.CreateAccount(user)
 }
 
 func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
-	return e.state.GetAccountsForUser(user)
+	return e.state.GetAccountAdrs(user)
 }
 
 func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint64) (interface{}, error) {
-	balance, nonce, page, userOps, err := e.state.GetAccountInfo(user, account, chainId)
+	accInfo, err := e.state.GetAccountInfoByAA(user, account)
 	if err != nil {
 		return nil, err
 	}
 	return types.AccountInfo{
-		Balance:        balance.String(),
-		Nonce:          nonce + 1,
-		UserOperations: userOps,
-		LatestPage:     page,
+		Balance:        accInfo.Gas.String(),
+		Nonce:          accInfo.Nonce[chainId] + 1,
+		UserOperations: accInfo.UserOperations,
+		LatestPage:     accInfo.HistoryPage,
 	}, nil
 }
 
@@ -67,7 +68,7 @@ func (e *EthEndpoints) ReportHis(user, account common.Address, data state_types.
 }
 
 func (e *EthEndpoints) GetUserHistory(user, account common.Address, page uint64) (interface{}, error) {
-	_, _, _, _, err := e.state.GetAccountInfo(user, account, 0)
+	_, err := e.state.GetAccountInfoByAA(user, account)
 	if err != nil {
 		return nil, err
 	}

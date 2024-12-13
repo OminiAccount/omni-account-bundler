@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/OAB/etherman"
 	"github.com/OAB/pool"
-	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -32,19 +31,20 @@ func NewSynchronizer(p types.PoolInterface, ethereum types.EthereumInterface, st
 }
 
 func (s *Synchronizer) Start() {
-	log.Info("Sync start")
+	log.Info("Sync start......")
 	acFunc := func(acc etherman.AccountCreateData) {
-		log.Infof("Synchronize to a new account mapping, user: %s, account: %s", acc.Owner, acc.Account)
-		err := s.state.AddNewMapping(stateTypes.AccountMapping{
+		log.Infof("chainID: %d, sync to a new account, user: %s, account: %s",
+			acc.ChainID, acc.Owner, acc.Account)
+		/*err := s.state.AddNewMapping(stateTypes.AccountMapping{
 			User:    acc.Owner,
 			Account: acc.Account,
 		})
 		if err != nil {
 			log.Error("Add a new account mapping error", "error", err)
-		}
+		}*/
 	}
 	dpFunc := func(dp etherman.DepositData) {
-		log.Infof("Synchronize to a new deposit ticket, data: %+v", dp)
+		log.Infof("sync to a new deposit ticket, data: %+v", dp)
 		ticker := s.pool.GetTicket(dp.Did)
 		if ticker == nil {
 			log.Errorf("invalid deposit operation, data: %+v", dp)
@@ -65,13 +65,13 @@ func (s *Synchronizer) Start() {
 		s.pool.AddSignedUserOperation(ticker.SignedUserOp)
 	}
 	wtFunc := func(wt etherman.WithdrawData) {
-		log.Info("Synchronize to a new withdraw ticket，data: %+v", wt)
+		log.Info("sync to a new withdraw ticket，data: %+v", wt)
 	}
 	eoFunc := func(eo etherman.ExecOpData) {
 		if eo.Phase != pool.PhaseSecond || !eo.InnerExec || !eo.Success {
 			return
 		}
-		log.Info("Synchronize to a new exec op evnet，data: %+v", eo)
+		log.Info("sync to a new exec op evnet，data: %+v", eo)
 		uop, err := s.state.GetSignedUserOp(eo.Owner, eo.Account, eo.ID)
 		if err != nil {
 			log.Errorf("get signedUserOperation by id, error: %+v", err)

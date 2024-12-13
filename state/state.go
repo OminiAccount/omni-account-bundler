@@ -24,14 +24,14 @@ type State struct {
 	provenQueue *queue.ConcurrentQueue[ProofResult]
 }
 
-func NewState(cfg Config, pool PoolInterface, ethereum EthereumInterface) (*State, error) {
+func NewState(cfg Config, pool PoolInterface, ether EthereumInterface) (*State, error) {
 	ctx, cancel := context.WithCancel(cfg.Context)
 	state := &State{
 		cfg:         cfg,
 		ctx:         ctx,
 		cancel:      cancel,
 		pool:        pool,
-		ethereum:    ethereum,
+		ethereum:    ether,
 		tree:        merkletree.NewSMT(db.NewMemDb(cfg.LevelDB), false),
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),

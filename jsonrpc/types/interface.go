@@ -5,15 +5,15 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/state/types"
 	"github.com/ethereum/go-ethereum/common"
-	"math/big"
 )
 
 type StateInterface interface {
 	GetBatchProof() ([]*state.Batch, error)
-	SetBatchProofResult(result *state.ProofResult) error
-	GetAccountsForUser(user common.Address) *[]common.Address
-	GetAccountInfo(user, account common.Address, chainId uint64) (*big.Int, uint64, uint64, []*pool.UserOperation, error)
-	AddSignedUserOperation(userOp *pool.SignedUserOperation) error
+	SetBatchProofResult(*state.ProofResult) error
+	GetAccountAdrs(common.Address) *[]common.Address
+	GetAccountInfoByAA(common.Address, common.Address) (*types.AccountInfo, error)
+	GetAccountInfo(common.Address) (*common.Address, *types.AccountInfo)
+	AddSignedUserOperation(*pool.SignedUserOperation) error
 	CreateAccount(common.Address) *common.Address
 }
 
