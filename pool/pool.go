@@ -37,7 +37,7 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 
 func (p *Pool) AddTicket(ticket *TicketFull) {
 	p.mu.Lock()
-	log.Info("Add a new ticket", "ticket", ticket)
+	log.Infof("Add a new ticket: %+v", ticket)
 	p.storage.addTicket(ticket)
 	p.mu.Unlock()
 }

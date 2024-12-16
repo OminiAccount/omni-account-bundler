@@ -19,12 +19,25 @@ func NewEthEndpoints(s types.StateInterface, his types.HisInterface) *EthEndpoin
 	return &EthEndpoints{s, his}
 }
 
-func (e *EthEndpoints) SendUserOperation(signedUserOp *pool.SignedUserOperation) error {
-	log.Infof("[receive op] %+v", signedUserOp.UserOperation)
-	if len(signedUserOp.Signature) == 0 {
+func (e *EthEndpoints) SendUserOperation(suop *pool.SignedUserOperation) error {
+	log.Infof("[receive op] %+v", suop.UserOperation)
+	if len(suop.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
 	}
-	return e.state.AddSignedUserOperation(signedUserOp)
+	if suop.Owner.Hex() == "0x" {
+		return fmt.Errorf("invalid owner")
+	}
+	ai, err := e.state.GetAccountInfoByAA(suop.Owner, suop.Sender)
+	if err != nil {
+		return err
+	}
+	if _, ok := ai.Nonce[suop.Exec.ChainId.Uint64()]; suop.Exec.ChainId.Uint64() > 0 && !ok {
+		return fmt.Errorf("chain:%d does not exist this account:%s", suop.Exec.ChainId, suop.Sender)
+	}
+	if _, ok := ai.Nonce[suop.InnerExec.ChainId.Uint64()]; suop.InnerExec.ChainId.Uint64() > 0 && !ok {
+		return fmt.Errorf("chain:%d does not exist this account:%s", suop.InnerExec.ChainId, suop.Sender)
+	}
+	return e.state.AddSignedUserOperation(suop)
 }
 
 func (e *EthEndpoints) GetBatchProof() (interface{}, error) {

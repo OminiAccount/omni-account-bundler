@@ -217,50 +217,51 @@ func NewHisInfra(ctx context.Context, cfg Config, s *State) *HisInfra {
 func (tm *HisInfra) GetPendingHis() (map[string]*IndexAccountHistory, error) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
+	return tm.pendingHis()
+}
+
+func (tm *HisInfra) pendingHis() (map[string]*IndexAccountHistory, error) {
 	has, err := tm.state.storage.db.Has([]byte(tm.HisIndexKey))
 	if err != nil {
+		log.Errorf("key: %s, read db err: %v", tm.HisIndexKey, err)
 		return nil, err
 	}
 	if has {
 		data, err := tm.state.storage.db.Get([]byte(tm.HisIndexKey))
 		if err != nil {
+			log.Errorf("key: %s, get data from db err: %v", tm.HisIndexKey, err)
 			return nil, err
 		}
 		decodeData, err := msgpack.UnmarshalStruct[map[string]*IndexAccountHistory](data)
 		if err != nil {
+			log.Errorf("key: %s, UnmarshalStruct err: %v", tm.HisIndexKey, err)
 			return nil, err
 		}
 		return decodeData, nil
 	}
-	return nil, nil
+	return make(map[string]*IndexAccountHistory), nil
+}
+
+func (tm *HisInfra) putHis(iahm map[string]*IndexAccountHistory) error {
+	data, err := msgpack.MarshalStruct(iahm)
+	if err != nil {
+		log.Errorf("key: %s, MarshalStruct err: %v", tm.HisIndexKey, err)
+		return err
+	}
+	err = tm.state.storage.db.Put([]byte(tm.HisIndexKey), data)
+	return err
 }
 
 func (tm *HisInfra) DelExistHis(his *types.AccountHistory) error {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
 	delete(tm.existHis, fmt.Sprintf("%s", his.ID))
-	has, err := tm.state.storage.db.Has([]byte(tm.HisIndexKey))
+	iahm, err := tm.pendingHis()
 	if err != nil {
 		return err
 	}
-	if has {
-		data, err := tm.state.storage.db.Get([]byte(tm.HisIndexKey))
-		if err != nil {
-			return err
-		}
-		decodeData, err := msgpack.UnmarshalStruct[map[string]*IndexAccountHistory](data)
-		if err != nil {
-			return err
-		}
-		delete(decodeData, fmt.Sprintf("%s", his.ID))
-		data, err = msgpack.MarshalStruct(decodeData)
-		if err != nil {
-			return err
-		}
-		err = tm.state.storage.db.Put([]byte(tm.HisIndexKey), data)
-		return err
-	}
-	return nil
+	delete(iahm, fmt.Sprintf("%s", his.ID))
+	return tm.putHis(iahm)
 }
 
 func (tm *HisInfra) AddHisPage(his *types.AccountHistory) error {
@@ -299,65 +300,28 @@ func (tm *HisInfra) AddHisPage(his *types.AccountHistory) error {
 func (tm *HisInfra) AddHisAccIndex(his *types.AccountHistory, page uint64) error {
 	//tm.lock.Lock()
 	//defer tm.lock.Unlock()
-	key := fmt.Sprintf(tm.HisAccIdxKey, his.Account)
-	has, err := tm.state.storage.db.Has([]byte(key))
+	haikm, err := tm.hisAccIndex(his.Account)
 	if err != nil {
 		return err
 	}
-	var accIdx map[string]string
-	if has {
-		data, err := tm.state.storage.db.Get([]byte(key))
-		if err != nil {
-			return err
-		}
-		decodeData, err := msgpack.UnmarshalStruct[map[string]string](data)
-		if err != nil {
-			return err
-		}
-		accIdx = decodeData
-	} else {
-		accIdx = make(map[string]string)
-	}
-	accIdx[fmt.Sprintf("%s", his.ID)] = strconv.FormatUint(page, 10)
-	data, err := msgpack.MarshalStruct(accIdx)
-	if err != nil {
-		return err
-	}
-	err = tm.state.storage.db.Put([]byte(key), data)
-	log.Infof("AddHisAccIndex success: %+v", accIdx)
+	haikm[fmt.Sprintf("%s", his.ID)] = strconv.FormatUint(page, 10)
+	err = tm.putHisAccIndex(his.Account, haikm)
+	log.Infof("AddHisAccIndex success: %+v", haikm)
 	return err
 }
 
 func (tm *HisInfra) AddExistHis(his *types.AccountHistory) error {
 	log.Infof("AddExistHis: %+v", his)
 	tm.existHis[fmt.Sprintf("%s", his.ID)] = time.Now().Unix()
-	has, err := tm.state.storage.db.Has([]byte(tm.HisIndexKey))
+	idxAccountHis, err := tm.pendingHis()
 	if err != nil {
 		return err
-	}
-	var idxAccountHis map[string]*IndexAccountHistory
-	if has {
-		data, err := tm.state.storage.db.Get([]byte(tm.HisIndexKey))
-		if err != nil {
-			return err
-		}
-		idxAccountHis, err = msgpack.UnmarshalStruct[map[string]*IndexAccountHistory](data)
-		if err != nil {
-			log.Errorf("AddExistHis err: %v", err)
-			return err
-		}
-	} else {
-		idxAccountHis = make(map[string]*IndexAccountHistory)
 	}
 	idxAccountHis[fmt.Sprintf("%s", his.ID)] = &IndexAccountHistory{
 		AccountHistory: his,
 		TimeAt:         time.Now().Unix(),
 	}
-	data, err := msgpack.MarshalStruct(idxAccountHis)
-	if err != nil {
-		return err
-	}
-	err = tm.state.storage.db.Put([]byte(tm.HisIndexKey), data)
+	err = tm.putHis(idxAccountHis)
 	log.Infof("AddExistHis put indexkey: %+v", idxAccountHis)
 	return err
 }
@@ -366,28 +330,20 @@ func (tm *HisInfra) IsExistHis(his *types.AccountHistory) bool {
 	if _, ok := tm.existHis[fmt.Sprintf("%s", his.ID)]; ok {
 		return true
 	}
-	data, err := tm.state.storage.db.Get([]byte(tm.HisIndexKey))
+	iahm, err := tm.pendingHis()
 	if err != nil {
 		return false
 	}
-	decodeData, err := msgpack.UnmarshalStruct[map[string]*IndexAccountHistory](data)
-	if err != nil {
-		return false
-	}
-	if idxHis, ok := decodeData[fmt.Sprintf("%s", his.ID)]; ok {
+	if idxHis, ok := iahm[fmt.Sprintf("%s", his.ID)]; ok {
 		if idxHis.Account == his.Account {
 			return true
 		}
 	}
-	data, err = tm.state.storage.db.Get([]byte(fmt.Sprintf(tm.HisAccIdxKey, his.Account)))
+	haikm, err := tm.hisAccIndex(his.Account)
 	if err != nil {
 		return false
 	}
-	decodData, err := msgpack.UnmarshalStruct[map[string]string](data)
-	if err != nil {
-		return false
-	}
-	if idxHis, ok := decodData[fmt.Sprintf("%s", his.ID)]; ok && idxHis != "" {
+	if idxHis, ok := haikm[fmt.Sprintf("%s", his.ID)]; ok && idxHis != "" {
 		return true
 	}
 	return false
@@ -396,24 +352,49 @@ func (tm *HisInfra) IsExistHis(his *types.AccountHistory) bool {
 func (tm *HisInfra) GetHisAccIndex(op *pool.UserOperation) (int64, error) {
 	tm.lock.Lock()
 	defer tm.lock.Unlock()
-	key := fmt.Sprintf(tm.HisAccIdxKey, op.Sender)
-	has, err := tm.state.storage.db.Has([]byte(key))
+	haikm, err := tm.hisAccIndex(op.Sender.Hex())
 	if err != nil {
 		return -1, err
 	}
+	if page, ok := haikm[op.Did]; ok {
+		return strconv.ParseInt(page, 10, 64)
+	}
+	return -1, nil
+}
+
+func (tm *HisInfra) hisAccIndex(user string) (map[string]string, error) {
+	key := fmt.Sprintf(tm.HisAccIdxKey, user)
+	has, err := tm.state.storage.db.Has([]byte(key))
+	if err != nil {
+		log.Errorf("key: %s, read db err: %+v", key, err)
+		return nil, err
+	}
+	var accIdx map[string]string
 	if has {
 		data, err := tm.state.storage.db.Get([]byte(key))
 		if err != nil {
-			return -1, err
+			log.Errorf("get data(%s) from db err: %+v", key, err)
+			return nil, err
 		}
 		decodeData, err := msgpack.UnmarshalStruct[map[string]string](data)
 		if err != nil {
-			return -1, err
+			log.Errorf("key: %s, UnmarshalStruct err: %+v", key, err)
+			return nil, err
 		}
-		if page, ok := decodeData[op.Did]; ok {
-			return strconv.ParseInt(page, 10, 64)
-		}
-		return -1, nil
+		accIdx = decodeData
+	} else {
+		accIdx = make(map[string]string)
 	}
-	return -1, nil
+	return accIdx, nil
+}
+
+func (tm *HisInfra) putHisAccIndex(user string, d map[string]string) error {
+	key := fmt.Sprintf(tm.HisAccIdxKey, user)
+	data, err := msgpack.MarshalStruct(d)
+	if err != nil {
+		log.Errorf("key: %s, MarshalStruct err: %+v", key, err)
+		return err
+	}
+	err = tm.state.storage.db.Put([]byte(key), data)
+	return err
 }

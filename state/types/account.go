@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OAB/pool"
+	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"maps"
@@ -85,6 +86,7 @@ func ToUserOperationHis(tx string, op *pool.UserOperation) AccountHistory {
 }
 
 type AccountInfo struct {
+	Salt           uint64
 	Nonce          Nonce
 	Gas            *big.Int
 	UserOperations []*pool.UserOperation
@@ -137,7 +139,7 @@ func (info *AccountInfo) gasOperation(operation *pool.UserOperation) bool {
 type AccountMapping struct {
 	User    common.Address
 	Account common.Address
-	Salt uint64
+	Salt    uint64
 }
 
 func NewUserAccount() *UserAccount {
@@ -145,23 +147,36 @@ func NewUserAccount() *UserAccount {
 	return &ua
 }
 
-func (u *UserAccount) AddNewMapping(mapping AccountMapping) error {
+func (u *UserAccount) InitNonce(chainID chains.ChainId, am AccountMapping) {
+	ai, err := u.GetAccount(am.User, am.Account)
+	if err != nil {
+		return
+	}
+
+	Lock.Lock()
+	defer Lock.Unlock()
+	ai.Nonce[uint64(chainID)] = 0
+	(*u)[am.User][am.Account] = *ai
+}
+
+func (u *UserAccount) AddNewMapping(am AccountMapping) error {
 	Lock.Lock()
 	defer Lock.Unlock()
 
-	if (*u)[mapping.User] == nil {
-		(*u)[mapping.User] = make(map[common.Address]AccountInfo)
+	if (*u)[am.User] == nil {
+		(*u)[am.User] = make(map[common.Address]AccountInfo)
 	}
 
 	// Check if the user already has the maximum number of accounts
-	if len((*u)[mapping.User]) >= UserHaveAccountsMaxNumber {
+	if len((*u)[am.User]) >= UserHaveAccountsMaxNumber {
 		return errors.New("user has reached the maximum number of accounts")
 	}
 
-	(*u)[mapping.User][mapping.Account] = AccountInfo{
+	(*u)[am.User][am.Account] = AccountInfo{
 		Nonce:          make(map[uint64]uint64),
 		Gas:            big.NewInt(0),
 		UserOperations: []*pool.UserOperation{},
+		Salt:           am.Salt,
 	}
 	return nil
 }

@@ -2,33 +2,24 @@ package pool
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/OAB/lib/common/hexutil"
+	"math/big"
 )
 
-func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
-	type dec SignedUserOperation
+func (s *ExecData) UnmarshalJSON(input []byte) error {
+	type dec ExecData
 	aux := &struct {
-		ChainId              string `json:"chainId"`
-		MainChainGasPrice    string `json:"mainChainGasPrice"`
-		DestChainGasPrice    string `json:"destChainGasPrice"`
-		MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas"`
+		MainChainGasPrice string `json:"mainChainGasPrice"`
+		DestChainGasPrice string `json:"destChainGasPrice"`
 		*dec
 	}{
 		dec: (*dec)(s),
 	}
-
 	if err := json.Unmarshal(input, &aux); err != nil {
 		return err
 	}
-
-	/*if aux.ChainId != "" {
-		chainId, ok := new(big.Int).SetString(aux.ChainId, 0)
-		if !ok {
-			return fmt.Errorf("invalid ChainId value: %s", aux.ChainId)
-		}
-		s.ChainId = (*hexutil.Big)(chainId)
-	}*/
-
-	/*if aux.MainChainGasPrice != "" {
+	if aux.MainChainGasPrice != "" {
 		mainChainGasPrice, ok := new(big.Int).SetString(aux.MainChainGasPrice, 0)
 		if !ok {
 			return fmt.Errorf("invalid MainChainGasPrice value: %s", aux.MainChainGasPrice)
@@ -42,17 +33,34 @@ func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
 			return fmt.Errorf("invalid DestChainGasPrice value: %s", aux.DestChainGasPrice)
 		}
 		s.DestChainGasPrice = (*hexutil.Big)(destChainGasPrice)
-	}*/
+	}
+	return nil
+}
 
-	//if aux.MaxPriorityFeePerGas != "" {
-	//	maxPriorityFeePerGas, ok := new(big.Int).SetString(aux.MaxPriorityFeePerGas, 0)
-	//	if !ok {
-	//		return fmt.Errorf("invalid MaxPriorityFeePerGas value: %s", aux.MaxPriorityFeePerGas)
-	//	}
-	//	s.MaxPriorityFeePerGas = (*hexutil.Big)(maxPriorityFeePerGas)
-	//}
+func (s *SignedUserOperation) UnmarshalJSON(input []byte) error {
+	type dec SignedUserOperation
+	aux := &struct {
+		*dec
+	}{
+		dec: (*dec)(s),
+	}
 
-	//s.RecoverAddress()
+	if err := json.Unmarshal(input, &aux); err != nil {
+		return err
+	}
+
+	if aux.Exec.MainChainGasPrice == nil ||
+		aux.Exec.DestChainGasPrice == nil ||
+		aux.Exec.Nonce < 1 ||
+		aux.Exec.ChainId.Uint64() < 1 ||
+		aux.InnerExec.MainChainGasPrice == nil ||
+		aux.InnerExec.DestChainGasPrice == nil ||
+		aux.InnerExec.Nonce < 1 ||
+		aux.InnerExec.ChainId.Uint64() < 1 {
+		return fmt.Errorf("invalid data")
+	}
+
+	s.RecoverAddress()
 
 	return nil
 }

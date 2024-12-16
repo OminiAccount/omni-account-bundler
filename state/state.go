@@ -55,37 +55,6 @@ func (s *State) Start() {
 			s.Persistence()
 		}
 	}()
-	/*go func() {
-		time.Sleep(time.Second*20)
-		// create uop
-		for i := 1; i < 3; i++ {
-			err := s.AddSignedUserOperation(&pool.SignedUserOperation{
-				Owner:     common.HexToAddress("0x24F4F8e83eA08b7DCb7A579B1236fc3155300854"),
-				Did:       strconv.FormatInt(int64(i), 10),
-				Signature: []byte{},
-				UserOperation: &pool.UserOperation{
-					OperationType:          pool.DepositAction,
-					OperationValue:         2000,
-					Sender:                 common.HexToAddress("0x2c6a4142c56b848e01e95fc35c4ad7b6483bc60c"),
-					Nonce:                  hexutil.Uint64(i),
-					ChainId:                (*hexutil.Big)(big.NewInt(28516)),
-					CallData:               hexutil.Bytes{0},
-					MainChainGasLimit:      hexutil.Uint64(10),
-					DestChainGasLimit:      hexutil.Uint64(10),
-					ZkVerificationGasLimit: hexutil.Uint64(10),
-					MainChainGasPrice:      (*hexutil.Big)(big.NewInt(2)),
-					DestChainGasPrice:      (*hexutil.Big)(big.NewInt(2)),
-				},
-			})
-			log.Infof("%+v", err)
-		}
-
-		// create proof
-		time.Sleep(time.Minute)
-		_ = s.SetBatchProofResult(&ProofResult{
-			Number: 1,
-		})
-	}()*/
 }
 
 func (s *State) Stop() {

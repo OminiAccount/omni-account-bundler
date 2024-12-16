@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"github.com/OAB/pool"
 	"github.com/OAB/state/types"
+	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 )
+
+func (s *State) InitAccountNonce(chainID chains.ChainId, am types.AccountMapping) {
+	s.storage.Account.InitNonce(chainID, am)
+}
 
 func (s *State) AddNewMapping(mapping types.AccountMapping) error {
 	return s.storage.Account.AddNewMapping(mapping)

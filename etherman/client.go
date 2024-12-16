@@ -105,8 +105,8 @@ func (c *EthereumClient) readEvents(ctx context.Context, query ethereum.FilterQu
 		err := c.processEvent(vLog, &blocks)
 		if err != nil {
 			log.Errorf("chainID: %d, processing event error: %s. vLog: %+v", c.chainID, err.Error(), vLog)
-			//return nil, err
-			continue
+			return nil, err
+			//continue
 		}
 	}
 	return blocks, nil
@@ -123,7 +123,7 @@ func (c *EthereumClient) processEvent(vLog types.Log, blocks *[]Block) error {
 	case operationPhaseEventHash:
 		return c.execOpEvent(vLog, blocks)
 	}
-	log.Infof("chainID: %d, Event not registered: %+v", c.chainID, vLog)
+	//log.Infof("chainID: %d, Event not registered: %+v", c.chainID, vLog)
 	return nil
 }
 
@@ -137,11 +137,11 @@ func (c *EthereumClient) accountCreateEvent(vLog types.Log, blocks *[]Block) err
 	ac := ToAccountCreateData(evt)
 	ac.ChainID = c.chainID
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
-		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
+		fullBlock, err := c.ethClient.HeaderByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
 			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
 		}
-		t := time.Unix(int64(fullBlock.Time()), 0)
+		t := time.Unix(int64(fullBlock.Time), 0)
 		block := prepareBlock(vLog, t, fullBlock)
 		block.ac = append(block.ac, ac)
 		*blocks = append(*blocks, block)
@@ -169,11 +169,11 @@ func (c *EthereumClient) depositEvent(vLog types.Log, blocks *[]Block) error {
 
 	dp := ToDepositData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
-		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
+		fullBlock, err := c.ethClient.HeaderByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
 			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
 		}
-		t := time.Unix(int64(fullBlock.Time()), 0)
+		t := time.Unix(int64(fullBlock.Time), 0)
 		block := prepareBlock(vLog, t, fullBlock)
 		block.dp = append(block.dp, dp)
 		*blocks = append(*blocks, block)
@@ -201,11 +201,11 @@ func (c *EthereumClient) withdrawEvent(vLog types.Log, blocks *[]Block) error {
 
 	wt := ToWithdrawData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
-		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
+		fullBlock, err := c.ethClient.HeaderByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
 			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
 		}
-		t := time.Unix(int64(fullBlock.Time()), 0)
+		t := time.Unix(int64(fullBlock.Time), 0)
 		block := prepareBlock(vLog, t, fullBlock)
 		block.wt = append(block.wt, wt)
 		*blocks = append(*blocks, block)
@@ -233,11 +233,11 @@ func (c *EthereumClient) execOpEvent(vLog types.Log, blocks *[]Block) error {
 	log.Infof("%+v", evt)
 	eo := ToExecOpData(evt)
 	if len(*blocks) == 0 || ((*blocks)[len(*blocks)-1].BlockHash != vLog.BlockHash || (*blocks)[len(*blocks)-1].BlockNumber != vLog.BlockNumber) {
-		fullBlock, err := c.ethClient.BlockByHash(context.Background(), vLog.BlockHash)
+		fullBlock, err := c.ethClient.HeaderByHash(context.Background(), vLog.BlockHash)
 		if err != nil {
 			return fmt.Errorf("error getting hashParent. BlockNumber: %d. Error: %w", vLog.BlockNumber, err)
 		}
-		t := time.Unix(int64(fullBlock.Time()), 0)
+		t := time.Unix(int64(fullBlock.Time), 0)
 		block := prepareBlock(vLog, t, fullBlock)
 		block.eo = append(block.eo, eo)
 		*blocks = append(*blocks, block)
@@ -256,11 +256,11 @@ func (c *EthereumClient) execOpEvent(vLog types.Log, blocks *[]Block) error {
 	return nil
 }
 
-func prepareBlock(vLog types.Log, t time.Time, fullBlock *types.Block) Block {
+func prepareBlock(vLog types.Log, t time.Time, fullBlock *types.Header) Block {
 	var block Block
 	block.BlockNumber = vLog.BlockNumber
 	block.BlockHash = vLog.BlockHash
-	block.ParentHash = fullBlock.ParentHash()
+	block.ParentHash = fullBlock.ParentHash
 	block.ReceivedAt = t
 	return block
 }

@@ -118,23 +118,33 @@ func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 			"UserOperation": []apitypes.Type{
 				{Name: "operation", Type: "bytes32"},
 				{Name: "sender", Type: "address"},
-				{Name: "opInfo", Type: "bytes32"},
-				{Name: "callData", Type: "bytes32"},
-				{Name: "chainGasLimit", Type: "bytes32"},
-				{Name: "zkVerificationGasLimit", Type: "uint256"},
-				{Name: "chainGasPrice", Type: "bytes32"},
+				{Name: "opInfo0", Type: "bytes32"},
+				{Name: "callData0", Type: "bytes32"},
+				{Name: "chainGasLimit0", Type: "bytes32"},
+				{Name: "zkVerificationGasLimit0", Type: "uint256"},
+				{Name: "chainGasPrice0", Type: "bytes32"},
+				{Name: "opInfo1", Type: "bytes32"},
+				{Name: "callData1", Type: "bytes32"},
+				{Name: "chainGasLimit1", Type: "bytes32"},
+				{Name: "zkVerificationGasLimit1", Type: "uint256"},
+				{Name: "chainGasPrice1", Type: "bytes32"},
 			},
 		},
 		PrimaryType: "UserOperation",
 		Domain:      domain,
 		Message: apitypes.TypedDataMessage{
-			"operation": hexutil.Encode(u.PackOperation()),
-			"sender":    u.Sender.String(),
-			//"opInfo":                 hexutil.Encode(u.PackOpInfo()),
-			//"callData":               crypto.Keccak256Hash(u.CallData).Hex(),
-			//"chainGasLimit":          hexutil.Encode(u.PackChainGasLimit()),
-			//"zkVerificationGasLimit": u.ZkVerificationGasLimit.String(),
-			//"chainGasPrice":          hexutil.Encode(u.PackChainGasPrice()),
+			"operation":               hexutil.Encode(u.PackOperation()),
+			"sender":                  u.Sender.String(),
+			"opInfo0":                 hexutil.Encode(u.PackOpInfo(u.Exec)),
+			"callData0":               crypto.Keccak256Hash(u.Exec.CallData).Hex(),
+			"chainGasLimit0":          hexutil.Encode(u.PackChainGasLimit(u.Exec)),
+			"zkVerificationGasLimit0": u.Exec.ZkVerificationGasLimit.String(),
+			"chainGasPrice0":          hexutil.Encode(u.PackChainGasPrice(u.Exec)),
+			"opInfo1":                 hexutil.Encode(u.PackOpInfo(u.InnerExec)),
+			"callData1":               crypto.Keccak256Hash(u.InnerExec.CallData).Hex(),
+			"chainGasLimit1":          hexutil.Encode(u.PackChainGasLimit(u.InnerExec)),
+			"zkVerificationGasLimit1": u.InnerExec.ZkVerificationGasLimit.String(),
+			"chainGasPrice1":          hexutil.Encode(u.PackChainGasPrice(u.InnerExec)),
 		},
 	}
 
@@ -170,10 +180,10 @@ func (s *SignedUserOperation) RecoverAddress() common.Address {
 
 	signature := common.CopyBytes(s.Signature)
 	if len(signature) != crypto.SignatureLength {
-		fmt.Printf("signature must be %d bytes long", crypto.SignatureLength)
+		log.Errorf("signature must be %d bytes long", crypto.SignatureLength)
 	}
 	if signature[crypto.RecoveryIDOffset] != 27 && signature[crypto.RecoveryIDOffset] != 28 {
-		fmt.Printf("invalid Ethereum signature (V is not 27 or 28)")
+		log.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 	}
 	signature[crypto.RecoveryIDOffset] -= 27 // Transform yellow paper V from 27/28 to 0/1
 	sigPublicKey, err := crypto.SigToPub(messageHash, signature)

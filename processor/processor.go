@@ -46,7 +46,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	log.Info("Pool successfully initialized")
 
 	// Ethereum
-	ethereum, err := etherman.NewEthereum(cfg.Ethereum, levelDB)
+	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, levelDB)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +92,7 @@ func (p *Processor) Start() error {
 	p.server.Start()
 	p.state.Start()
 	p.pool.StartAutoFlush()
+	p.ethereum.Start()
 	p.synchronizer.Start()
 	return nil
 }
@@ -101,6 +102,7 @@ func (p *Processor) Stop() {
 	log.Warn("stopping processor")
 	//p.service.Stop()
 	p.synchronizer.Stop()
+	p.ethereum.Stop()
 	p.pool.StopAutoFlush()
 	p.state.Stop()
 	log.Warn("processor stopped")

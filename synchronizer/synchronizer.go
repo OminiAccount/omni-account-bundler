@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/OAB/etherman"
 	"github.com/OAB/pool"
+	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -35,13 +36,10 @@ func (s *Synchronizer) Start() {
 	acFunc := func(acc etherman.AccountCreateData) {
 		log.Infof("chainID: %d, sync to a new account, user: %s, account: %s",
 			acc.ChainID, acc.Owner, acc.Account)
-		/*err := s.state.AddNewMapping(stateTypes.AccountMapping{
+		s.state.InitAccountNonce(acc.ChainID, stateTypes.AccountMapping{
 			User:    acc.Owner,
 			Account: acc.Account,
 		})
-		if err != nil {
-			log.Error("Add a new account mapping error", "error", err)
-		}*/
 	}
 	dpFunc := func(dp etherman.DepositData) {
 		log.Infof("sync to a new deposit ticket, data: %+v", dp)

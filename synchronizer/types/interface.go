@@ -21,6 +21,7 @@ type (
 	}
 
 	StateInterface interface {
+		InitAccountNonce(chains.ChainId, types.AccountMapping)
 		AddNewMapping(mapping types.AccountMapping) error
 		AddAccountGas(*pool.SignedUserOperation) error
 		GetSignedUserOp(common.Address, common.Address, string) (*pool.SignedUserOperation, error)

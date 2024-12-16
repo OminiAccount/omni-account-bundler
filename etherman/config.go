@@ -1,11 +1,13 @@
 package etherman
 
 import (
+	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type Config struct {
-	Networks    []Network          `mapstructure:"networks"`
+	VizingChainID chains.ChainId `mapstructure:"vizing-chain-id"`
+	Networks      []Network      `mapstructure:"networks"`
 }
 
 // KeystoreFileConfig has all the information needed to load a private key from a key store file

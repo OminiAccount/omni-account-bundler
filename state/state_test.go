@@ -1,16 +1,56 @@
 package state
 
 import (
-	"fmt"
+	"context"
+	"encoding/json"
 	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/pool"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"testing"
 )
 
+func TestBlock(t *testing.T) {
+	cli, err := ethclient.Dial("https://sepolia-rollup.arbitrum.io/rpc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	//block, err := cli.BlockByHash(context.Background(), common.HexToHash("0x37f01502c50a5cd9a95febd3bfb612e3026859589e645b5b3600cd7dd670fe9f"))
+	/*block, err := cli.BlockByNumber(context.Background(), big.NewInt(106514310))
+	if err != nil {
+		t.Fatalf("Failed to get block: %v", err)
+	}
+	for _, tx := range block.Transactions() {
+		switch tx.Type() {
+		case 0x0: // Legacy transaction
+			t.Log("LegacyTx:", tx)
+		case 0x1: // AccessList transaction (EIP-2930)
+			t.Log("AccessListTx:", tx)
+		case 0x2: // DynamicFee transaction (EIP-1559)
+			t.Log("DynamicFeeTx:", tx)
+		default:
+			t.Fatalf("Unsupported transaction type: %d", tx.Type())
+		}
+	}
+	*/
+
+	var raw json.RawMessage
+	err = cli.Client().Call(&raw, "eth_getBlockByNumber", hexutil.EncodeBig(big.NewInt(106514310)), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(raw)
+
+	header, err := cli.HeaderByNumber(context.Background(), big.NewInt(106514310))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(header.Number)
+	t.Log(header.Time)
+	t.Log(header.ParentHash)
+	t.Log(header.Hash())
+}
+
+/*
 func TestEncodeCircuitInput(t *testing.T) {
 	userOpDeposit := pool.UserOperation{
 		OperationType:          1,
@@ -212,4 +252,4 @@ func CreateUserOps() []*pool.SignedUserOperation {
 	//}
 
 	return sus
-}
+}*/
