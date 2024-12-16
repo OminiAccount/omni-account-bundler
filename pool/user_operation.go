@@ -25,18 +25,26 @@ const (
 )
 
 type UserOperation struct {
-	OperationType          uint8            `json:"operationType"`
-	OperationValue         hexutil.Uint64   `json:"operationValue"`
-	Sender                 common.Address   `json:"sender"`
-	Nonce                  hexutil.Uint64   `json:"nonce"`
-	ChainId                []hexutil.Uint64 `json:"chainId"`
-	CallData               hexutil.Bytes    `json:"callData"`
-	MainChainGasLimit      hexutil.Uint64   `json:"mainChainGasLimit"`
-	DestChainGasLimit      hexutil.Uint64   `json:"destChainGasLimit"`
-	ZkVerificationGasLimit hexutil.Uint64   `json:"zkVerificationGasLimit"`
-	MainChainGasPrice      *hexutil.Big     `json:"mainChainGasPrice"`
-	DestChainGasPrice      *hexutil.Big     `json:"destChainGasPrice"`
-	Step                   uint8            `json:"destChainGasPrice"`
+	OperationType           uint8          `json:"operationType"`
+	OperationValue          hexutil.Uint64 `json:"operationValue"`
+	Sender                  common.Address `json:"sender"`
+	Nonce                   hexutil.Uint64 `json:"nonce"`
+	ChainId                 hexutil.Uint64 `json:"chainId"`
+	CallData                hexutil.Bytes  `json:"callData"`
+	MainChainGasLimit       hexutil.Uint64 `json:"mainChainGasLimit"`
+	DestChainGasLimit       hexutil.Uint64 `json:"destChainGasLimit"`
+	ZkVerificationGasLimit  hexutil.Uint64 `json:"zkVerificationGasLimit"`
+	MainChainGasPrice       *hexutil.Big   `json:"mainChainGasPrice"`
+	DestChainGasPrice       *hexutil.Big   `json:"destChainGasPrice"`
+	Nonce1                  hexutil.Uint64 `json:"nonce1"`
+	ChainId1                hexutil.Uint64 `json:"chainId1"`
+	CallData1               hexutil.Bytes  `json:"callData1"`
+	MainChainGasLimit1      hexutil.Uint64 `json:"mainChainGasLimit1"`
+	DestChainGasLimit1      hexutil.Uint64 `json:"destChainGasLimit1"`
+	ZkVerificationGasLimit1 hexutil.Uint64 `json:"zkVerificationGasLimit1"`
+	MainChainGasPrice1      *hexutil.Big   `json:"mainChainGasPrice1"`
+	DestChainGasPrice1      *hexutil.Big   `json:"destChainGasPrice1"`
+	Step                    uint8          `json:"destChainGasPrice"`
 }
 
 type SignedUserOperation struct {
@@ -56,18 +64,28 @@ func (u *UserOperation) CalculateGasUsed() *big.Int {
 	return &totalGas
 }
 
+func (u *UserOperation) CalculateGasUsed1() *big.Int {
+	var totalGas big.Int
+	totalGas.Add(big.NewInt(int64(u.MainChainGasLimit1)), big.NewInt(int64(u.ZkVerificationGasLimit1)))
+	totalGas.Mul(&totalGas, u.MainChainGasPrice1.ToInt())
+	var destGas big.Int
+	destGas.Mul(big.NewInt(int64(u.DestChainGasLimit1)), u.DestChainGasPrice1.ToInt())
+	totalGas.Add(&totalGas, &destGas)
+	return &totalGas
+}
+
 func (u *UserOperation) IsGasOperation() bool {
 	return u.OperationType == DepositAction || u.OperationType == WithdrawAction
 }
 
 // PackOpInfo the `Nonce` and `ChainId`
 func (u *UserOperation) PackOpInfo() []byte {
-	chainIdUint := []uint64{0, 0, 0, 0}
-	for i, cid := range u.ChainId {
-		chainIdUint[i] = cid.Uint64()
-	}
-	group := poseidon2.H4ToScalar(chainIdUint)
-	value, _ := packutils.PackUints(big.NewInt(int64(u.Nonce)), group)
+	value, _ := packutils.PackUints(big.NewInt(int64(u.Nonce)), big.NewInt(int64(u.ChainId)))
+	return value
+}
+
+func (u *UserOperation) PackOpInfo1() []byte {
+	value, _ := packutils.PackUints(big.NewInt(int64(u.Nonce1)), big.NewInt(int64(u.ChainId1)))
 	return value
 }
 
@@ -76,8 +94,21 @@ func (u *UserOperation) PackChainGasLimit() []byte {
 	return value
 }
 
+func (u *UserOperation) PackChainGasLimit1() []byte {
+	value, _ := packutils.PackUints(big.NewInt(int64(u.MainChainGasLimit1)), big.NewInt(int64(u.DestChainGasLimit1)))
+	return value
+}
+
 func (u *UserOperation) PackChainGasPrice() []byte {
 	value, _ := packutils.PackUints(u.MainChainGasPrice.ToInt(), u.DestChainGasPrice.ToInt())
+	return value
+}
+
+func (u *UserOperation) PackChainGasPrice1() []byte {
+	if u.MainChainGasPrice1 == nil {
+		return common.Hash{}.Bytes()
+	}
+	value, _ := packutils.PackUints(u.MainChainGasPrice1.ToInt(), u.DestChainGasPrice1.ToInt())
 	return value
 }
 
@@ -103,23 +134,33 @@ func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 			"UserOperation": []apitypes.Type{
 				{Name: "operation", Type: "bytes32"},
 				{Name: "sender", Type: "address"},
-				{Name: "opInfo", Type: "bytes32"},
-				{Name: "callData", Type: "bytes32"},
-				{Name: "chainGasLimit", Type: "bytes32"},
-				{Name: "zkVerificationGasLimit", Type: "uint256"},
-				{Name: "chainGasPrice", Type: "bytes32"},
+				{Name: "opInfo0", Type: "bytes32"},
+				{Name: "callData0", Type: "bytes32"},
+				{Name: "chainGasLimit0", Type: "bytes32"},
+				{Name: "zkVerificationGasLimit0", Type: "uint256"},
+				{Name: "chainGasPrice0", Type: "bytes32"},
+				{Name: "opInfo1", Type: "bytes32"},
+				{Name: "callData1", Type: "bytes32"},
+				{Name: "chainGasLimit1", Type: "bytes32"},
+				{Name: "zkVerificationGasLimit1", Type: "uint256"},
+				{Name: "chainGasPrice1", Type: "bytes32"},
 			},
 		},
 		PrimaryType: "UserOperation",
 		Domain:      domain,
 		Message: apitypes.TypedDataMessage{
-			"operation":              hexutil.Encode(u.PackOperation()),
-			"sender":                 u.Sender.String(),
-			"opInfo":                 hexutil.Encode(u.PackOpInfo()),
-			"callData":               crypto.Keccak256Hash(u.CallData).Hex(),
-			"chainGasLimit":          hexutil.Encode(u.PackChainGasLimit()),
-			"zkVerificationGasLimit": u.ZkVerificationGasLimit.String(),
-			"chainGasPrice":          hexutil.Encode(u.PackChainGasPrice()),
+			"operation":               hexutil.Encode(u.PackOperation()),
+			"sender":                  u.Sender.String(),
+			"opInfo0":                 hexutil.Encode(u.PackOpInfo()),
+			"callData0":               crypto.Keccak256Hash(u.CallData).Hex(),
+			"chainGasLimit0":          hexutil.Encode(u.PackChainGasLimit()),
+			"zkVerificationGasLimit0": u.ZkVerificationGasLimit.String(),
+			"chainGasPrice0":          hexutil.Encode(u.PackChainGasPrice()),
+			"opInfo1":                 hexutil.Encode(u.PackOpInfo1()),
+			"callData1":               crypto.Keccak256Hash(u.CallData1).Hex(),
+			"chainGasLimit1":          hexutil.Encode(u.PackChainGasLimit1()),
+			"zkVerificationGasLimit1": u.ZkVerificationGasLimit1.String(),
+			"chainGasPrice1":          hexutil.Encode(u.PackChainGasPrice1()),
 		},
 	}
 
@@ -238,7 +279,7 @@ func (s *SignedUserOperation) ToEntryPointOp() EntryPoint.BaseStructPackedUserOp
 		OperationValue:         big.NewInt(0).SetUint64(uint64(s.OperationValue)),
 		Sender:                 s.Sender,
 		Nonce:                  uint64(s.Nonce),
-		ChainId:                chainIDToUints(s.ChainId),
+		ChainId:                uint64(s.ChainId),
 		CallData:               s.CallData,
 		MainChainGasLimit:      uint64(s.MainChainGasLimit),
 		MainChainGasPrice:      s.MainChainGasPrice.Uint64(),
@@ -255,7 +296,7 @@ func (s *SignedUserOperation) ToSyncRouterOp() SyncRouter.BaseStructPackedUserOp
 		OperationValue:         big.NewInt(0).SetUint64(uint64(s.OperationValue)),
 		Sender:                 s.Sender,
 		Nonce:                  uint64(s.Nonce),
-		ChainId:                chainIDToUints(s.ChainId),
+		ChainId:                uint64(s.ChainId),
 		CallData:               s.CallData,
 		MainChainGasLimit:      uint64(s.MainChainGasLimit),
 		MainChainGasPrice:      s.MainChainGasPrice.Uint64(),

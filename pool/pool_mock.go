@@ -42,7 +42,7 @@ func CreateUserOps() []*SignedUserOperation {
 		OperationValue:         0x2c68af0bb140000,
 		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
 		Nonce:                  1,
-		ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
+		ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 		CallData:               common.FromHex("0x"),
 		MainChainGasLimit:      0x30d40,
 		DestChainGasLimit:      0,
@@ -53,6 +53,8 @@ func CreateUserOps() []*SignedUserOperation {
 
 	{
 		dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
+
+		fmt.Println("dataHash==", common.BytesToHash(dataHash))
 
 		// Sign
 		signedUserOperation := SignedUserOperation{
@@ -72,7 +74,7 @@ func CreateUserOps() []*SignedUserOperation {
 		OperationValue:         0xb1a2bc2ec50000,
 		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
 		Nonce:                  2,
-		ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
+		ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 		CallData:               common.FromHex("0x"),
 		MainChainGasLimit:      0x30d40,
 		DestChainGasLimit:      0,
@@ -83,6 +85,8 @@ func CreateUserOps() []*SignedUserOperation {
 
 	{
 		dataHash := userOpWithdraw.CalculateEIP712TypeDataHash()
+
+		fmt.Println("dataHash==", common.BytesToHash(dataHash))
 
 		// Sign
 		signedUserOperation := SignedUserOperation{
@@ -102,7 +106,7 @@ func CreateUserOps() []*SignedUserOperation {
 			OperationType:          0,
 			Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
 			Nonce:                  hexutil.Uint64(3 + i),
-			ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
+			ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 			CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
 			MainChainGasLimit:      0x30d40,
 			DestChainGasLimit:      0,

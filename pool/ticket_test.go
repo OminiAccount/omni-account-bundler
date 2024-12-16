@@ -2,6 +2,9 @@ package pool
 
 import (
 	"fmt"
+	"github.com/OAB/database/leveldb"
+	"github.com/OAB/utils"
+	"github.com/OAB/utils/db"
 	"github.com/OAB/utils/merkletree"
 	"github.com/OAB/utils/packutils"
 	"github.com/OAB/utils/poseidon"
@@ -9,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+	"path/filepath"
 	"testing"
 )
 
@@ -17,7 +21,7 @@ func TestPackUint(t *testing.T) {
 	b := big.NewInt(13)
 	value, _ := packutils.PackUints(a, b)
 	t.Log(value)
-	a,b,_ = packutils.UnpackUints(value)
+	a, b, _ = packutils.UnpackUints(value)
 	t.Log(a.Uint64(), b.Uint64())
 
 	result := poseidon.H4ToScalar([]uint64{13, 14, 0, 0})
@@ -78,7 +82,10 @@ func TestEip712(t *testing.T) {
 	// BatchData Hash
 	fmt.Println("AccInput Hash", HashSignedUserOperationV1s(sus))
 
-	tree := merkletree.NewSMT(nil, false)
+	levelDBDir, _ := filepath.Abs("./db")
+	utils.PathExists(levelDBDir)
+	levelDB, _ := leveldb.NewLevelDB(levelDBDir)
+	tree := merkletree.NewSMT(db.NewMemDb(levelDB), false)
 
 	fmt.Println("=====================")
 
@@ -88,7 +95,10 @@ func TestEip712(t *testing.T) {
 
 		// balance
 		var balance big.Int
-		balanceU256, _ := tree.GetAccountBalance(userOperation.Sender)
+		balanceU256, err := tree.GetAccountBalance(userOperation.Sender)
+		if err != nil {
+			fmt.Printf("Failed to get account balance: %v", err)
+		}
 		balance.SetBytes(balanceU256.Bytes())
 		fmt.Println("oldBalance", &balance)
 		operationValue := new(big.Int).SetUint64(userOperation.OperationValue.Uint64())
@@ -107,7 +117,7 @@ func TestEip712(t *testing.T) {
 		fmt.Printf("balance %d - CalculateGasUsed %d\n", &balance, userOperation.CalculateGasUsed())
 		balance.Sub(&balance, userOperation.CalculateGasUsed())
 
-		_, err := tree.SetAccountBalance(userOperation.Sender.String(), &balance)
+		_, err = tree.SetAccountBalance(userOperation.Sender.String(), &balance)
 		if err != nil {
 			fmt.Println("accountBalance error", err)
 		}
@@ -115,7 +125,7 @@ func TestEip712(t *testing.T) {
 
 		// nonce
 		var nonce big.Int
-		nonceU256, err := tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId[0].String())
+		nonceU256, err := tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId.String())
 		if err != nil {
 			fmt.Println("accountNonce error", err)
 		}
@@ -123,7 +133,33 @@ func TestEip712(t *testing.T) {
 		fmt.Println("oldNonce", nonce.Uint64())
 		nonce.Add(&nonce, big.NewInt(1))
 		fmt.Println("newNonce", nonce.Uint64())
-		tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId[0].String())
+		tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId.String())
+
+		// innerExec
+		if userOperation.ChainId1 != 0 {
+			fmt.Println("innerExec ......")
+			fmt.Printf("balance %d - CalculateGasUsed %d\n", &balance, userOperation.CalculateGasUsed1())
+			balance.Sub(&balance, userOperation.CalculateGasUsed1())
+
+			_, err := tree.SetAccountBalance(userOperation.Sender.String(), &balance)
+			if err != nil {
+				fmt.Println("accountBalance error", err)
+			}
+			fmt.Println("newBalance", &balance)
+
+			// nonce
+			var nonce big.Int
+			nonceU256, err := tree.GetAccountNonce(userOperation.Sender, userOperation.ChainId1.String())
+			if err != nil {
+				fmt.Println("accountNonce error", err)
+			}
+			nonce.SetBytes(nonceU256.Bytes())
+			fmt.Println("oldNonce", nonce.Uint64())
+			nonce.Add(&nonce, big.NewInt(1))
+			fmt.Println("newNonce", nonce.Uint64())
+			tree.SetAccountNonce(userOperation.Sender.String(), &nonce, userOperation.ChainId1.String())
+
+		}
 
 		//expectGasBalance, expectNonce := s.storage.Account.GetAccountInfoByAccountAndChainId(userOperation.Sender, userOperation.ChainId.ToInt().Uint64())
 		//fmt.Println("expectGasBalance", expectGasBalance)

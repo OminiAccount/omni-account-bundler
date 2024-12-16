@@ -67,7 +67,7 @@ type BaseStructPackedUserOperation struct {
 	OperationValue         *big.Int
 	Sender                 common.Address
 	Nonce                  uint64
-	ChainId                []uint64
+	ChainId                uint64
 	CallData               []byte
 	MainChainGasLimit      uint64
 	DestChainGasLimit      uint64
