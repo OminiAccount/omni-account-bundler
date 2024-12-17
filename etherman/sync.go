@@ -50,7 +50,7 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		wtFunc:         wtFunc,
 		eoFunc: 		eoFunc,
 	}
-	lastBlockSync, err := cliSync.storage.Get(cliSync.ChainKey())
+	lastBlockSync, err := cliSync.storage.Get(cliSync.chainKey())
 	if err != nil {
 		if err.Error() == LevalDBNotFound {
 			lastBlockSync = []byte{0}
@@ -69,19 +69,19 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		}
 		cliSync.genBlockNumber = header.Number.Uint64()
 	}
-	_ = cliSync.storage.Put(cliSync.ChainKey(), packutils.Uint64ToBytes(cliSync.genBlockNumber))
+	_ = cliSync.storage.Put(cliSync.chainKey(), packutils.Uint64ToBytes(cliSync.genBlockNumber))
 	return cliSync, nil
 }
 
 var waitDuration = time.Second
 
-func (s *ClientSynchronizer) ChainKey() []byte {
+func (s *ClientSynchronizer) chainKey() []byte {
 	return []byte(fmt.Sprintf("chain-sync-%d", s.networkID))
 }
 
 func (s *ClientSynchronizer) Sync() {
 	log.Infof("NetworkID: %d, Synchronization started", s.networkID)
-	lastBlockSync, err := s.storage.Get(s.ChainKey())
+	lastBlockSync, err := s.storage.Get(s.chainKey())
 	if err != nil {
 		log.Errorf("networkID: %d, unexpected error getting the latest block. Error: %s", s.networkID, err.Error())
 		return
@@ -92,7 +92,7 @@ func (s *ClientSynchronizer) Sync() {
 		select {
 		case <-s.ctx.Done():
 			log.Infof("NetworkID: %d, synchronizer ctx done", s.networkID)
-			err = s.storage.Put(s.ChainKey(), packutils.Uint64ToBytes(lastBlockSynced))
+			err = s.storage.Put(s.chainKey(), packutils.Uint64ToBytes(lastBlockSynced))
 			if err != nil {
 				log.Errorf("networkID: %d, put last sync block: %d, error: %+v", s.networkID, lastBlockSynced, err)
 				return
@@ -104,7 +104,7 @@ func (s *ClientSynchronizer) Sync() {
 			if err != nil {
 				log.Errorf("networkID: %d, error syncing blocks: %+v", s.networkID, err)
 			}
-			err = s.storage.Put(s.ChainKey(), packutils.Uint64ToBytes(lastBlockSynced))
+			err = s.storage.Put(s.chainKey(), packutils.Uint64ToBytes(lastBlockSynced))
 			if err != nil {
 				log.Errorf("networkID: %d, put last sync block: %d, error: %+v", s.networkID, lastBlockSynced, err)
 				return
@@ -180,14 +180,16 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 
 func (s *ClientSynchronizer) processBlockRange(blocks []Block) error {
 	for i := range blocks {
-		for _, element := range blocks[i].or {
-			switch element.Name {
+		for _, ele := range blocks[i].or {
+			switch ele.Name {
 			case AccountCreatedOrder:
-				s.acFunc(blocks[i].ac[element.Pos])
+				s.acFunc(blocks[i].ac[ele.Pos])
 			case DepositTicketAddedOrder:
-				s.dpFunc(blocks[i].dp[element.Pos])
+				s.dpFunc(blocks[i].dp[ele.Pos])
 			case WithdrawTicketAddedOrder:
-
+				s.wtFunc(blocks[i].wt[ele.Pos])
+			case ExecOpOrder:
+				s.eoFunc(blocks[i].eo[ele.Pos])
 			}
 		}
 	}

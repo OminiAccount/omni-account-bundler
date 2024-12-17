@@ -224,15 +224,13 @@ func (ether *EtherMan) Start() {
 			select {
 			case <-ticker.C:
 				for cid, _ := range ether.chainsClient {
-					go func(id chains.ChainId) {
-						pdm := ether.loadPendingData(id)
-						if pdm == nil {
-							return
-						}
-						for _, pd := range pdm {
-							ether.pendingCreateAA(pd)
-						}
-					}(cid)
+					pdm := ether.loadPendingData(cid)
+					if pdm == nil {
+						return
+					}
+					for _, pd := range pdm {
+						ether.pendingCreateAA(pd)
+					}
 				}
 			case <-ether.ctx.Done():
 				log.Info("EtherMan exit...")

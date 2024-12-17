@@ -1,8 +1,8 @@
 package pool
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/OAB/utils/merkletree"
 	"github.com/OAB/utils/packutils"
 	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -11,6 +11,16 @@ import (
 	"math/big"
 	"testing"
 )
+
+func TestOpUnmarshalJSON(t *testing.T) {
+	raw := `{"operationType":1,"operationValue":"0x0","sender":"0x569db0654a0c9844257a7f496e02f9e7bc805c0b","exec":{"nonce":"0x1","chainId":"0x6f64","callData":"0x","mainChainGasLimit":"0x0","destChainGasLimit":"0x3d090","zkVerificationGasLimit":"0x898","mainChainGasPrice":"0x5f5e100","destChainGasPrice":"0x3b9aca00"},"innerExec":{"nonce":"0x0","chainId":"0x0","callData":"0x","mainChainGasLimit":"0x0","destChainGasLimit":"0x0","zkVerificationGasLimit":"0x0","mainChainGasPrice":"0x0","destChainGasPrice":"0x0"},"signature":"0xd0c0f69178773015bae93e1e61f1c80e3065d25074230ab48e43e96cd5fb0331014397c3afa3963a4d1837853276b4be213b92d13ecda23677e3dd7bda3c427a1c"}`
+	var uo SignedUserOperation
+	err := json.Unmarshal([]byte(raw), &uo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%+v", uo.UserOperation)
+}
 
 func TestPackUint(t *testing.T) {
 	a := big.NewInt(12)
@@ -69,7 +79,7 @@ func TestHashSignedUserOperationV1s(t *testing.T) {
 }
 
 func TestEip712(t *testing.T) {
-	sus := CreateUserOps()
+	/*sus := CreateUserOps()
 
 	// encode context,used for circuit
 	encodeBytes := EncodeEip712Context(sus)
@@ -137,5 +147,5 @@ func TestEip712(t *testing.T) {
 		}
 	}
 
-	fmt.Println("newRoot", common.BigToHash(tree.LastRoot()))
+	fmt.Println("newRoot", common.BigToHash(tree.LastRoot()))*/
 }

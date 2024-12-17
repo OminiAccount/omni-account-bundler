@@ -49,7 +49,7 @@ type UserOperation struct {
 	Owner          common.Address `json:"owner"`
 	Sender         common.Address `json:"sender"`
 	Exec           ExecData       `json:"exec"`
-	InnerExec      ExecData       `json:"inner_exec"`
+	InnerExec      ExecData       `json:"innerExec"`
 	Phase          uint8          `json:"destChainGasPrice"`
 }
 
@@ -92,6 +92,9 @@ func (u *UserOperation) PackChainGasLimit(d ExecData) []byte {
 }
 
 func (u *UserOperation) PackChainGasPrice(d ExecData) []byte {
+	if d.MainChainGasPrice == nil {
+		return common.Hash{}.Bytes()
+	}
 	value, _ := packutils.PackUints(d.MainChainGasPrice.ToInt(), d.DestChainGasPrice.ToInt())
 	return value
 }
@@ -99,7 +102,7 @@ func (u *UserOperation) PackChainGasPrice(d ExecData) []byte {
 func (u *UserOperation) PackOperation() []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, u.OperationType)
-	encodeBytes = append(encodeBytes, common.LeftPadBytes(u.OperationValue.ToInt().Bytes(), 248)...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(u.OperationValue.ToInt().Bytes(), 31)...)
 	return encodeBytes
 }
 
