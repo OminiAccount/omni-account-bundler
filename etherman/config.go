@@ -6,8 +6,10 @@ import (
 )
 
 type Config struct {
-	VizingChainID chains.ChainId `mapstructure:"vizing-chain-id"`
-	Networks      []Network      `mapstructure:"networks"`
+	VizingNetwork Network `mapstructure:"vizing"`
+	ArbitNetwork  Network `mapstructure:"arbitrum"`
+	BaseNetwork   Network `mapstructure:"base"`
+	OpNetwork     Network `mapstructure:"optimism"`
 }
 
 // KeystoreFileConfig has all the information needed to load a private key from a key store file
@@ -21,7 +23,7 @@ type KeystoreFileConfig struct {
 
 // Network configures the network's chainId, rpc and contract's address
 type Network struct {
-	ChainId        uint64             `mapstructure:"chain-id"`
+	ChainId        chains.ChainId     `mapstructure:"chain-id"`
 	Rpc            string             `mapstructure:"rpc"`
 	EntryPoint     common.Address     `mapstructure:"entry-point"`
 	AccountFactory common.Address     `mapstructure:"account-factory"`

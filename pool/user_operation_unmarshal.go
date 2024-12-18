@@ -27,6 +27,9 @@ func (s *ExecData) UnmarshalJSON(input []byte) error {
 		}
 		s.MainChainGasPrice = (*hexutil.Big)(mainChainGasPrice)
 	}
+	if s.MainChainGasPrice == nil {
+		s.MainChainGasPrice = (*hexutil.Big)(big.NewInt(0))
+	}
 
 	if aux.DestChainGasPrice != "" {
 		destChainGasPrice, ok := new(big.Int).SetString(aux.DestChainGasPrice, 0)
@@ -34,6 +37,9 @@ func (s *ExecData) UnmarshalJSON(input []byte) error {
 			return fmt.Errorf("invalid DestChainGasPrice value: %s", aux.DestChainGasPrice)
 		}
 		s.DestChainGasPrice = (*hexutil.Big)(destChainGasPrice)
+	}
+	if s.DestChainGasPrice == nil {
+		s.DestChainGasPrice = (*hexutil.Big)(big.NewInt(0))
 	}
 
 	return nil

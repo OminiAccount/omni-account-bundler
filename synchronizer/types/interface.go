@@ -3,6 +3,7 @@ package types
 import (
 	"github.com/OAB/etherman"
 	"github.com/OAB/pool"
+	"github.com/OAB/state"
 	"github.com/OAB/state/types"
 	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/common"
@@ -25,5 +26,6 @@ type (
 		AddNewMapping(mapping types.AccountMapping) error
 		AddAccountGas(*pool.SignedUserOperation) error
 		GetSignedUserOp(common.Address, common.Address, string) (*pool.SignedUserOperation, error)
+		GetHisIns() *state.HistoryManager
 	}
 )

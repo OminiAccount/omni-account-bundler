@@ -65,14 +65,17 @@ func (u *UserOperation) CalculateGasUsed() *big.Int {
 	var destGas big.Int
 	destGas.Mul(big.NewInt(int64(u.Exec.DestChainGasLimit)), u.Exec.DestChainGasPrice.ToInt())
 	totalGas.Add(&totalGas, &destGas)
-	var sSrcGas big.Int
-	sSrcGas.Add(big.NewInt(int64(u.InnerExec.MainChainGasLimit)), big.NewInt(int64(u.InnerExec.ZkVerificationGasLimit)))
-	sSrcGas.Mul(&sSrcGas, u.InnerExec.MainChainGasPrice.ToInt())
-	totalGas.Add(&totalGas, &sSrcGas)
-	var sDestGas big.Int
-	sDestGas.Mul(big.NewInt(int64(u.InnerExec.DestChainGasLimit)), u.InnerExec.DestChainGasPrice.ToInt())
-	totalGas.Add(&totalGas, &sDestGas)
-
+	if u.InnerExec.MainChainGasPrice != nil {
+		var sSrcGas big.Int
+		sSrcGas.Add(big.NewInt(int64(u.InnerExec.MainChainGasLimit)), big.NewInt(int64(u.InnerExec.ZkVerificationGasLimit)))
+		sSrcGas.Mul(&sSrcGas, u.InnerExec.MainChainGasPrice.ToInt())
+		totalGas.Add(&totalGas, &sSrcGas)
+	}
+	if u.InnerExec.DestChainGasPrice != nil {
+		var sDestGas big.Int
+		sDestGas.Mul(big.NewInt(int64(u.InnerExec.DestChainGasLimit)), u.InnerExec.DestChainGasPrice.ToInt())
+		totalGas.Add(&totalGas, &sDestGas)
+	}
 	return &totalGas
 }
 
@@ -102,7 +105,11 @@ func (u *UserOperation) PackChainGasPrice(d ExecData) []byte {
 func (u *UserOperation) PackOperation() []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, u.OperationType)
-	encodeBytes = append(encodeBytes, common.LeftPadBytes(u.OperationValue.ToInt().Bytes(), 31)...)
+	if u.OperationValue == nil {
+		encodeBytes = append(encodeBytes, common.LeftPadBytes([]byte{}, 31)...)
+	} else {
+		encodeBytes = append(encodeBytes, common.LeftPadBytes(u.OperationValue.ToInt().Bytes(), 31)...)
+	}
 	return encodeBytes
 }
 

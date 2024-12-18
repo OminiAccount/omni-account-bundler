@@ -9,17 +9,17 @@ file = "/app/log/server.log"
 outputs = ["stderr"]
 
 [ethereum]
-vizing-chain-id = 28516
-networks = [
-    {chain-id=28516,rpc="https://rpc-sepolia.vizing.com",entry-point="0xD4B426f113a858cD1521A8868d67D5407B3EdE5A",account-factory="0x75F82B744b3bD8b4A26AaECfB8157D996C7D1E95",sync-router="0xaAB80c905B5cd654132D3aC86b3922bA2F662d5F",is-sync=0,private_keys={path="/app/sender.keystore",password="password"}},
-]
-
-[db]
-host = "127.0.0.1"
-port = 3306
-user = "root"
-password = "sutai123456"
-name = "spv"
+[ethereum.vizing]
+chain-id = 28516
+rpc = "https://rpc-sepolia.vizing.com"
+entry-point = "0x03064C8cDB2dd14Edcd225204BB5f45931D26783"
+account-factory = "0xD64986da346370b4B24Fe23e25b57A5676782157"
+sync-router = "0xF126c02D118A1d2788B6eF3608E858aCF5A6BF0E"
+is-sync = 1
+gen-block = 0
+    [ethereum.vizing.private_keys]
+    path = "./bundler.keystore"
+    password = "password"
 
 [jsonrpc]
 host = "0.0.0.0"
@@ -29,4 +29,6 @@ port = 8100
 max-ops = 2
 flush-interval = 0
 
+[state]
+max-batches = 10
 `

@@ -8,7 +8,7 @@ import (
 )
 
 type StateInterface interface {
-	GetBatchProof() ([]*state.Batch, error)
+	GetBatchProof() ([]state.Batch, error)
 	SetBatchProofResult(*state.ProofResult) error
 	GetAccountAdrs(common.Address) *[]common.Address
 	GetAccountInfoByAA(common.Address, common.Address) (*types.AccountInfo, error)

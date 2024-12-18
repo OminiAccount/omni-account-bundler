@@ -50,7 +50,7 @@ func (p *Pool) GetTicket(id string) *TicketFull {
 
 func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
 	p.mu.Lock()
-	log.Infof("Add a new sign userOperation: %+v", op)
+	log.Infof("Add a new sign userOperation: %+v %+v", op.Signature, op.UserOperation)
 	p.storage.addUserOp(op)
 	p.mu.Unlock()
 	//p.CheckFlush()
@@ -94,6 +94,18 @@ func (p *Pool) Flush() {
 	p.batchCtx <- batchCtx
 }
 
+func (p *Pool) CleanTicker() {
+	log.Infof("clean ticket...")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	nowAt := time.Now().Unix()
+	for id, t := range p.storage.Tickets {
+		if (nowAt - t.TimeAt) > 3600 {
+			delete(p.storage.Tickets, id)
+		}
+	}
+}
+
 func (p *Pool) StartAutoFlush() {
 	log.Info("pool start")
 	go func() {
@@ -102,6 +114,7 @@ func (p *Pool) StartAutoFlush() {
 			select {
 			case <-ticker.C:
 				p.CheckFlush(false)
+				p.CleanTicker()
 			case <-p.ctx.Done():
 				ticker.Stop()
 				return

@@ -119,12 +119,12 @@ func (h *HistoryManager) checkHis(ctx context.Context, his *types.AccountHistory
 		return false, err
 	}
 	if his.From.Address != from.Hex() {
-		log.Infof("[HistoryManager] tx from address(%s / %s) mismatch", his.From.Address, from.Hex())
-		return true, fmt.Errorf("tx from address mismatch")
+		log.Warnf("[HistoryManager] tx from address(%s / %s) mismatch", his.From.Address, from.Hex())
+		//return true, fmt.Errorf("tx from address mismatch")
 	}
 	if his.From.Value != tx.Value().String() {
-		log.Infof("[HistoryManager] tx value(%s / %s) mismatch", his.From.Value, tx.Value().String())
-		return true, fmt.Errorf("tx value mismatch")
+		log.Warnf("[HistoryManager] tx value(%s / %s) mismatch", his.From.Value, tx.Value().String())
+		//return true, fmt.Errorf("tx value mismatch")
 	}
 	err = h.txMgr.AddHisPage(his)
 	if err != nil {

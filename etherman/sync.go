@@ -31,14 +31,15 @@ type ClientSynchronizer struct {
 	networkID      chains.ChainId
 	synced         bool
 
-	acFunc AccountCreateFunc
-	dpFunc DepositFunc
-	wtFunc WithdrawFunc
-	eoFunc ExecOpFunc
+	acFunc  AccountCreateFunc
+	vdpFunc DepositFunc
+	dpFunc  DepositFunc
+	wtFunc  WithdrawFunc
+	eoFunc  ExecOpFunc
 }
 
 func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumClient,
-	acFunc AccountCreateFunc, dpFunc DepositFunc, wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
+	acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc, wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
 		storage:        db,
 		etherCli:       etherCli,
@@ -46,9 +47,10 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		genBlockNumber: etherCli.cfg.GenBlockNumber,
 		networkID:      etherCli.chainID,
 		acFunc:         acFunc,
+		vdpFunc:        vdpFunc,
 		dpFunc:         dpFunc,
 		wtFunc:         wtFunc,
-		eoFunc: 		eoFunc,
+		eoFunc:         eoFunc,
 	}
 	lastBlockSync, err := cliSync.storage.Get(cliSync.chainKey())
 	if err != nil {
@@ -184,6 +186,8 @@ func (s *ClientSynchronizer) processBlockRange(blocks []Block) error {
 			switch ele.Name {
 			case AccountCreatedOrder:
 				s.acFunc(blocks[i].ac[ele.Pos])
+			case VizingDepositTicketOrder:
+				s.vdpFunc(blocks[i].dp[ele.Pos])
 			case DepositTicketAddedOrder:
 				s.dpFunc(blocks[i].dp[ele.Pos])
 			case WithdrawTicketAddedOrder:

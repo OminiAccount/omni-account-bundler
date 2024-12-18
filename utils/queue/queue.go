@@ -49,6 +49,16 @@ func (q *ConcurrentQueue[T]) Dequeue() (T, bool) {
 	return item, true
 }
 
+func (q *ConcurrentQueue[T]) Lrange(n int) ([]T, bool) {
+	q.lock.Lock()
+	defer q.lock.Unlock()
+
+	if len(q.items) == 0 {
+		return nil, false
+	}
+	return q.items[:n], true
+}
+
 func (q *ConcurrentQueue[T]) IsEmpty() bool {
 	q.lock.Lock()
 	defer q.lock.Unlock()

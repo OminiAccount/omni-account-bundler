@@ -3,6 +3,7 @@ package synchronizer
 import (
 	"context"
 	"github.com/OAB/etherman"
+	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
 	stateTypes "github.com/OAB/state/types"
 	"github.com/OAB/synchronizer/types"
@@ -42,7 +43,36 @@ func (s *Synchronizer) Start() {
 		})
 	}
 	dpFunc := func(dp etherman.DepositData) {
-		log.Infof("sync to a new deposit ticket, data: %+v", dp)
+		log.Infof("sync to a new value deposit ticket, data: %+v", dp)
+		if dp.Account.Hex() == "" || dp.Account.Hex() == "0x" {
+			log.Errorf("invalid deposit operation, data: %+v", dp)
+			return
+		}
+		if dp.User.Hex() == "" || dp.User.Hex() == "0x" {
+			log.Errorf("invalid deposit operation, data: %+v", dp)
+			return
+		}
+		if dp.Amount.Uint64() <= 0 {
+			log.Errorf("invalid deposit operation, data: %+v", dp)
+			return
+		}
+		uoHis := stateTypes.ToUserOperationHis(dp.TxHash, &pool.UserOperation{
+			Did:            dp.Did,
+			OperationType:  pool.DepositAction,
+			OperationValue: (*hexutil.Big)(dp.Amount),
+			Owner:          dp.User,
+			Sender:         dp.Account,
+			Exec: pool.ExecData{
+				ChainId: hexutil.Uint64(dp.ChainID),
+			},
+		})
+		err := s.state.GetHisIns().SaveAccountHis(dp.User, dp.Account, &uoHis)
+		if err != nil {
+			log.Errorf("cache account(%s, %s) history error: %v", dp.User, dp.Account, err)
+		}
+	}
+	vdpFunc := func(dp etherman.DepositData) {
+		log.Infof("sync to a new vizing deposit ticket, data: %+v", dp)
 		ticker := s.pool.GetTicket(dp.Did)
 		if ticker == nil {
 			log.Errorf("invalid deposit operation, data: %+v", dp)
@@ -61,6 +91,12 @@ func (s *Synchronizer) Start() {
 			return
 		}
 		s.pool.AddSignedUserOperation(ticker.SignedUserOp)
+		uoHis := stateTypes.ToUserOperationHis(dp.TxHash, ticker.SignedUserOp.UserOperation)
+		err := s.state.GetHisIns().SaveAccountHis(ticker.SignedUserOp.Owner, ticker.SignedUserOp.Sender, &uoHis)
+		if err != nil {
+			log.Errorf("cache account(%s, %s) history error: %v",
+				ticker.SignedUserOp.Owner, ticker.SignedUserOp.Sender, err)
+		}
 	}
 	wtFunc := func(wt etherman.WithdrawData) {
 		log.Info("sync to a new withdraw ticket，data: %+v", wt)
@@ -86,7 +122,7 @@ func (s *Synchronizer) Start() {
 		if !cli.IsNeedSync() {
 			continue
 		}
-		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, dpFunc, wtFunc, eoFunc)
+		chainSync, err := etherman.NewSynchronizer(s.ctx, s.storage, cli, acFunc, vdpFunc, dpFunc, wtFunc, eoFunc)
 		if err != nil {
 			log.Fatal(err.Error())
 		}

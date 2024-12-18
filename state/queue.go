@@ -2,23 +2,25 @@ package state
 
 import "github.com/OAB/utils/log"
 
-func (s *State) GetBatchProof() ([]*Batch, error) {
+func (s *State) GetBatchProof() ([]Batch, error) {
 	if s.proofQueue.IsEmpty() {
 		return nil, nil
 	}
-	var res []*Batch
-	for {
-		if ok := s.proofQueue.IsEmpty(); ok {
-			break
-		}
-		batch, _ := s.proofQueue.Dequeue()
-		res = append(res, &batch)
-	}
+	res, _ := s.proofQueue.Lrange(s.cfg.MaxBatches)
 	return res, nil
 }
 
-func (s *State) SetBatchProofResult(result *ProofResult) error {
-	log.Infof("SetBatchProofResult: %+v", result)
-	s.provenQueue.Enqueue(*result)
+func (s *State) SetBatchProofResult(res *ProofResult) error {
+	log.Infof("SetBatchProofResult: %+v", res)
+	var batch Batch
+	batch, _ = s.proofQueue.Dequeue()
+	if batch.NewNumBatch != res.Number {
+		s.proofQueue.Lpush(batch)
+		return nil
+	}
+	for i := res.Number + 1; i <= res.FinalNumber; i++ {
+		_, _ = s.proofQueue.Dequeue()
+	}
+	s.provenQueue.Enqueue(*res)
 	return nil
 }

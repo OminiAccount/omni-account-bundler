@@ -5,3 +5,4 @@
 cmd/cmd*
 
 *.keystore
+db_test/

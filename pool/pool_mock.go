@@ -3,6 +3,7 @@ package pool
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
 )
@@ -36,18 +37,20 @@ func CreateUserOps() []*SignedUserOperation {
 	var sus []*SignedUserOperation
 
 	// userOp for deposit 0.2 ether
-	/*userOpDeposit := UserOperation{
-		OperationType:          1,
-		OperationValue:         0x2c68af0bb140000,
-		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Nonce:                  1,
-		ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
-		CallData:               common.FromHex("0x"),
-		MainChainGasLimit:      0x30d40,
-		DestChainGasLimit:      0,
-		ZkVerificationGasLimit: 0x898,
-		MainChainGasPrice:      hexTo("0x9502f900"),
-		DestChainGasPrice:      hexTo("0x0"),
+	userOpDeposit := UserOperation{
+		OperationType:  1,
+		OperationValue: (*hexutil.Big)(big.NewInt(100)),
+		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Exec: ExecData{
+			Nonce:                  1,
+			ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
+			CallData:               common.FromHex("0x"),
+			MainChainGasLimit:      0x30d40,
+			DestChainGasLimit:      0,
+			ZkVerificationGasLimit: 0x898,
+			MainChainGasPrice:      hexTo("0x9502f900"),
+			DestChainGasPrice:      hexTo("0x0"),
+		},
 	}
 
 	{
@@ -67,17 +70,19 @@ func CreateUserOps() []*SignedUserOperation {
 
 	// userOp for withdraw 0.05 ether
 	userOpWithdraw := UserOperation{
-		OperationType:          2,
-		OperationValue:         0xb1a2bc2ec50000,
-		Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Nonce:                  2,
-		ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
-		CallData:               common.FromHex("0x"),
-		MainChainGasLimit:      0x30d40,
-		DestChainGasLimit:      0,
-		ZkVerificationGasLimit: 0x898,
-		MainChainGasPrice:      hexTo("0x9502f900"),
-		DestChainGasPrice:      hexTo("0x0"),
+		OperationType:  2,
+		OperationValue: (*hexutil.Big)(big.NewInt(100)),
+		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Exec: ExecData{
+			Nonce:                  2,
+			ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
+			CallData:               common.FromHex("0x"),
+			MainChainGasLimit:      0x30d40,
+			DestChainGasLimit:      0,
+			ZkVerificationGasLimit: 0x898,
+			MainChainGasPrice:      hexTo("0x9502f900"),
+			DestChainGasPrice:      hexTo("0x0"),
+		},
 	}
 
 	{
@@ -98,16 +103,19 @@ func CreateUserOps() []*SignedUserOperation {
 	for i := 0; i < 62; i++ {
 		// userOp for counter contract
 		userOpCounter := UserOperation{
-			OperationType:          0,
-			Sender:                 common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-			Nonce:                  hexutil.Uint64(3 + i),
-			ChainId:                []hexutil.Uint64{hexutil.Uint64(hexTo("0xaa36a7").Uint64())},
-			CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
-			MainChainGasLimit:      0x30d40,
-			DestChainGasLimit:      0,
-			ZkVerificationGasLimit: 0x898,
-			MainChainGasPrice:      hexTo("0x9502f900"),
-			DestChainGasPrice:      hexTo("0x0"),
+			OperationType:  0,
+			OperationValue: (*hexutil.Big)(big.NewInt(0)),
+			Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+			Exec: ExecData{
+				Nonce:                  hexutil.Uint64(3 + i),
+				ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
+				CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
+				MainChainGasLimit:      0x30d40,
+				DestChainGasLimit:      0,
+				ZkVerificationGasLimit: 0x898,
+				MainChainGasPrice:      hexTo("0x9502f900"),
+				DestChainGasPrice:      hexTo("0x0"),
+			},
 		}
 
 		{
@@ -125,7 +133,7 @@ func CreateUserOps() []*SignedUserOperation {
 			sus = append(sus, &signedUserOperationCounter)
 		}
 
-	}*/
+	}
 
 	return sus
 }

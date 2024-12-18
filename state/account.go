@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+	"time"
 )
 
 func (s *State) InitAccountNonce(chainID chains.ChainId, am types.AccountMapping) {
@@ -37,7 +38,8 @@ func (s *State) AddSignedUserOperation(suop *pool.SignedUserOperation) error {
 				User:   suop.Sender,
 				Amount: suop.OperationValue.ToInt(),
 			},
-			Type: pool.Deposit,
+			Type:   pool.Deposit,
+			TimeAt: time.Now().Unix(),
 		})
 		return nil
 	}

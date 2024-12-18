@@ -52,12 +52,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	}
 	log.Info("Ethereum successfully initialized")
 
-	// Init State
-	stateConfig, err := state.NewConfig(ctx, levelDB)
-	if err != nil {
-		return nil, err
-	}
-	st, err := state.NewState(stateConfig, poolInstance, ethereum)
+	st, err := state.NewState(ctx, cfg.State, poolInstance, ethereum, levelDB)
 	if err != nil {
 		return nil, err
 	}

@@ -224,10 +224,12 @@ func (u *UserAccount) AddSignedUserOperation(suo *pool.SignedUserOperation) erro
 		if expectNonce != suo.Exec.Nonce.Uint64() {
 			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", suo.Owner, expectNonce, suo.Exec.Nonce.Uint64())
 		}
-		accountInfo.increaseNonce(suo.InnerExec.ChainId.Uint64())
-		expectNonce = accountInfo.Nonce[suo.InnerExec.ChainId.Uint64()]
-		if expectNonce != suo.InnerExec.Nonce.Uint64() {
-			opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", suo.Owner, expectNonce, suo.InnerExec.Nonce.Uint64())
+		if suo.InnerExec.ChainId.Uint64() > 0 {
+			accountInfo.increaseNonce(suo.InnerExec.ChainId.Uint64())
+			expectNonce = accountInfo.Nonce[suo.InnerExec.ChainId.Uint64()]
+			if expectNonce != suo.InnerExec.Nonce.Uint64() {
+				opErr = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", suo.Owner, expectNonce, suo.InnerExec.Nonce.Uint64())
+			}
 		}
 	}
 

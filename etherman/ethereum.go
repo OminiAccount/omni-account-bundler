@@ -38,19 +38,27 @@ func NewEthereum(ctx context.Context, cfg Config, ethDb ethdb.Database) (*EtherM
 		chainsClient: make(map[chains.ChainId]*EthereumClient, chains.MaxChainInfoLength),
 		db:           ethDb,
 	}
-	for _, n := range cfg.Networks {
-		chainId := chains.ChainId(n.ChainId)
+	var nw = []Network{
+		cfg.VizingNetwork,
+		cfg.ArbitNetwork,
+		cfg.BaseNetwork,
+		cfg.OpNetwork,
+	}
+	for _, n := range nw {
+		if n.ChainId < 1 {
+			continue
+		}
 		cli, err := NewClient(n)
 		if err != nil {
 			return nil, err
 		}
-		opts, _, err := em.LoadAuthFromKeyStore(n.PrivateKeys.Path, n.PrivateKeys.Password, n.ChainId)
+		opts, _, err := em.LoadAuthFromKeyStore(n.PrivateKeys.Path, n.PrivateKeys.Password, uint64(n.ChainId))
 		if err != nil {
 			return nil, err
 		}
 		cli.sender = opts.From
 		cli.opAuth = *opts
-		em.chainsClient[chainId] = cli
+		em.chainsClient[n.ChainId] = cli
 	}
 	return em, nil
 }
@@ -64,7 +72,7 @@ func (ether *EtherMan) GetChainCli(c chains.ChainId) *EthereumClient {
 }
 
 func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperations []SyncRouter.BaseStructPackedUserOperation) (*big.Int, error) {
-	etherCli := ether.chainsClient[ether.cfg.VizingChainID]
+	etherCli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	opts := new(bind.CallOpts)
 	opts.From = etherCli.sender
 	log.Infof("EstimateGas destChainId: %d, destContract: %s, userOperations: %+v",
@@ -79,7 +87,7 @@ func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperatio
 }
 
 func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []EntryPoint.BaseStructBatchData, extraInfo EntryPoint.BaseStructChainsExecuteInfo) (common.Hash, error) {
-	etherCli := ether.chainsClient[ether.cfg.VizingChainID]
+	etherCli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	opts := etherCli.opAuth
 	/*nonce, err := etherCli.ethClient.NonceAt(context.Background(), opts.From, nil)
 	if err != nil {
@@ -107,7 +115,7 @@ func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []Entry
 }
 
 func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint64) {
-	ccli := ether.chainsClient[ether.cfg.VizingChainID]
+	ccli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	ccli.lock.Lock()
 	defer ccli.lock.Unlock()
 	var salt uint64

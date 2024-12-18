@@ -20,7 +20,7 @@ func NewEthEndpoints(s types.StateInterface, his types.HisInterface) *EthEndpoin
 }
 
 func (e *EthEndpoints) SendUserOperation(suop *pool.SignedUserOperation) error {
-	log.Infof("[receive op] %+v", suop.UserOperation)
+	log.Infof("[receive op] %+v %+v", suop.Signature, suop.UserOperation)
 	if len(suop.Signature) == 0 {
 		return fmt.Errorf("invalid signature")
 	}
