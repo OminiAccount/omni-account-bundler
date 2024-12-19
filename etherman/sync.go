@@ -120,7 +120,7 @@ func (s *ClientSynchronizer) Sync() {
 				lastKnownBlock := header.Number.Uint64()
 				if lastBlockSynced >= lastKnownBlock && !s.synced {
 					log.Infof("NetworkID %d Synced!", s.networkID)
-					waitDuration = time.Second * 60
+					waitDuration = time.Second * 20
 					s.synced = true
 				}
 			}
@@ -171,7 +171,7 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 		if lastKnownBlock.Uint64() <= toBlock {
 			if !s.synced {
 				log.Infof("NetworkID %d Synced!", s.networkID)
-				waitDuration = time.Second * 60
+				waitDuration = time.Second * 20
 				s.synced = true
 			}
 			break
