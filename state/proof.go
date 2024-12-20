@@ -173,7 +173,7 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			return nil, err
 		}
 	}
-	for _, op := range suo {
+	/*for _, op := range suo {
 		if op.OperationType == pool.DepositAction {
 			continue
 		}
@@ -187,6 +187,6 @@ func (s *State) executeBatch() (*ProofResult, error) {
 			log.Errorf("cache account(%s, %s) history error: %v", op.Owner, op.Sender, err)
 			continue
 		}
-	}
+	}*/
 	return nil, nil
 }

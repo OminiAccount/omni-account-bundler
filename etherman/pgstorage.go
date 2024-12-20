@@ -2,13 +2,12 @@ package etherman
 
 import (
 	"context"
-	"database/sql"
 	"errors"
-	"github.com/0xPolygonHermez/zkevm-node/db"
+	"fmt"
 	"github.com/OAB/database/pgstorage"
-	"github.com/OAB/utils/log"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"strings"
 	"time"
 )
 
@@ -94,4 +93,81 @@ func (p *PostgresStorage) GetChainSalt(ctx context.Context, nid uint64, dbTx pgx
 	var salt uint64
 	_ = e.QueryRow(ctx, getSQL, nid).Scan(&salt)
 	return salt
+}
+
+func (p *PostgresStorage) UpdateUserFailedSalt(ctx context.Context, user string, nid uint64, idDel bool, dbTx pgx.Tx) error {
+	var err error
+	var flag bool
+	if dbTx == nil {
+		flag = true
+		dbTx, err = p.BeginDBTransaction(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	var failedSalt string
+	getSQL := `SELECT failed_salt FROM omni.user where owner = $1 FOR UPDATE;`
+	e := p.getExecQuerier(dbTx)
+	err = e.QueryRow(ctx, getSQL, user).Scan(&failedSalt)
+	if err != nil {
+		if flag {
+			_ = dbTx.Rollback(ctx)
+		}
+		return err
+	}
+	if len(failedSalt) > 0 {
+		if idDel {
+			nidStr := fmt.Sprintf("%d", nid)
+			cids := strings.Split(failedSalt, ",")
+			for i, cid := range cids {
+				if cid == nidStr {
+					cids = append(cids[:i], cids[i+1:]...)
+					break
+				}
+			}
+			failedSalt = strings.Join(cids, ",")
+		} else {
+			failedSalt += "," + fmt.Sprintf("%d", nid)
+		}
+	} else if !idDel {
+		failedSalt = fmt.Sprintf("%d", nid)
+	}
+	updateSQL := `UPDATE omni.user SET failed_salt = $1 where owner = $2;`
+	_, err = e.Exec(ctx, updateSQL, failedSalt, user)
+	if err != nil {
+		if flag {
+			_ = dbTx.Rollback(ctx)
+		}
+		return err
+	}
+	if flag {
+		return dbTx.Commit(ctx)
+	}
+	return nil
+}
+
+type UserFailedSalt struct {
+	User       string
+	Salt       uint64
+	FailedSalt string
+}
+
+func (p *PostgresStorage) GetFailedSalts(ctx context.Context, dbTx pgx.Tx) []UserFailedSalt {
+	getSQL := `SELECT owner, salt, failed_salt FROM omni.user where failed_salt != "";`
+	e := p.getExecQuerier(dbTx)
+	rows, err := e.Query(ctx, getSQL)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var list []UserFailedSalt
+	for rows.Next() {
+		var ufs UserFailedSalt
+		err := rows.Scan(&ufs.User, &ufs.Salt, &ufs.FailedSalt)
+		if err != nil {
+			return nil
+		}
+		list = append(list, ufs)
+	}
+	return list
 }

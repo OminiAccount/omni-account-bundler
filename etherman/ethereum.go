@@ -2,20 +2,17 @@ package etherman
 
 import (
 	"context"
-	"fmt"
-	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
-	"github.com/OAB/utils/msgpack"
-	"github.com/OAB/utils/packutils"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -135,7 +132,13 @@ func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint
 		log.Errorf("get create account err: %+v", err)
 		return nil, salt
 	}
-	ether.db.SetChain(ether.ctx, uint64(ccli.chainID), salt+1, "salt", dbTx)
+	err = ether.db.SetChain(ether.ctx, uint64(ccli.chainID), salt+1, "salt", dbTx)
+	if err != nil {
+		_ = dbTx.Rollback(ether.ctx)
+		log.Errorf("set chain salt err: %+v", err)
+		return nil, salt
+	}
+	_ = dbTx.Commit(ether.ctx)
 	for _, cli := range ether.chainsClient {
 		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
 	}
@@ -167,52 +170,10 @@ func (ether *EtherMan) pendingCreateAA(pd PendingData) {
 }
 
 func (ether *EtherMan) saveFailedCreateAA(pd PendingData, isDel bool) {
-	pendingKey := fmt.Sprintf(PendingCreateAAKey, pd.ChainID)
-	pdm := ether.loadPendingData(pd.ChainID)
-	if pdm == nil {
-		return
-	}
-	if isDel {
-		delete(pdm, pd.User.Hex())
-	} else {
-		pdm[pd.User.Hex()] = pd
-	}
-	by, err := msgpack.MarshalStruct(pdm)
+	err := ether.db.UpdateUserFailedSalt(ether.ctx, pd.User.String(), uint64(pd.ChainID), isDel, nil)
 	if err != nil {
-		log.Errorf("chainID: %d, MarshalStruct err: %+v", pd.ChainID, err)
-		return
+		log.Errorf("chain: %d, user: %s, saveFailedCreateAA err: %+v", pd.ChainID, pd.User, err)
 	}
-	err = ether.db.Put([]byte(pendingKey), by)
-	if err != nil {
-		log.Errorf("chainID: %d, put pending key to db err: %+v", pd.ChainID, err)
-		return
-	}
-}
-
-func (ether *EtherMan) loadPendingData(cid chains.ChainId) map[string]PendingData {
-	pendingKey := fmt.Sprintf(PendingCreateAAKey, cid)
-	has, err := ether.db.Has([]byte(pendingKey))
-	if err != nil {
-		log.Errorf("[saveFailedCreateAA] chainID: %d, read db err: %+v", cid, err)
-		return nil
-	}
-	var pdm map[string]PendingData
-	if has {
-		data, err := ether.db.Get([]byte(pendingKey))
-		if err != nil {
-			log.Errorf("[saveFailedCreateAA] chainID: %d, from db get data err: %+v", cid, err)
-			return nil
-		}
-		decodeData, err := msgpack.UnmarshalStruct[map[string]PendingData](data)
-		if err != nil {
-			log.Errorf("[saveFailedCreateAA] chainID: %d, UnmarshalStruct err: %+v", cid, err)
-			return nil
-		}
-		pdm = decodeData
-	} else {
-		pdm = make(map[string]PendingData)
-	}
-	return pdm
 }
 
 func (ether *EtherMan) Start() {
@@ -221,13 +182,25 @@ func (ether *EtherMan) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				for cid, _ := range ether.chainsClient {
-					pdm := ether.loadPendingData(cid)
-					if pdm == nil {
-						return
+				list := ether.db.GetFailedSalts(ether.ctx, nil)
+				if list == nil || len(list) < 1 {
+					continue
+				}
+				for _, ufs := range list {
+					cids := strings.Split(ufs.FailedSalt, ",")
+					if len(cids) < 1 {
+						continue
 					}
-					for _, pd := range pdm {
-						ether.pendingCreateAA(pd)
+					for _, cid := range cids {
+						nid, err := strconv.ParseUint(cid, 10, 64)
+						if err != nil {
+							continue
+						}
+						ether.pendingCreateAA(PendingData{
+							User:    common.HexToAddress(ufs.User),
+							ChainID: chains.ChainId(nid),
+							Salt:    ufs.Salt,
+						})
 					}
 				}
 			case <-ether.ctx.Done():

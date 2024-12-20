@@ -14,8 +14,6 @@ import (
 type (
 	PoolInterface interface {
 		BatchContext() chan *pool.BatchContext
-		Cache() error
-		LoadCache()
 	}
 
 	EthereumInterface interface {

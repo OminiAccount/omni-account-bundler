@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/0xPolygonHermez/zkevm-node/db"
 	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/pool"
 	"github.com/OAB/utils/hex"
@@ -22,16 +21,8 @@ import (
 var (
 	// ErrStorageNotFound is used when the object is not found in the storage
 	ErrStorageNotFound = errors.New("not found in the Storage")
-	// ErrStorageNotRegister is used when the object is not found in the synchronizer
-	ErrStorageNotRegister = errors.New("not registered storage")
 	// ErrNilDBTransaction indicates the db transaction has not been properly initialized
 	ErrNilDBTransaction = errors.New("database transaction not properly initialized")
-	// ErrRestServerHealth indicates the health check of rest server failed
-	ErrRestServerHealth = errors.New("not ready for the rest server")
-	// ErrDepositNotSynced is used when the deposit is not synchronized in nodes
-	ErrDepositNotSynced = errors.New("not synchronized deposit")
-	// ErrNetworkNotRegister is used when the networkID is not registered in the bridge
-	ErrNetworkNotRegister = errors.New("not registered network")
 )
 
 // PostgresStorage implements the Storage interface.
@@ -116,9 +107,9 @@ func (p *PostgresStorage) ModUserInfo(ctx context.Context, uid, nid, nonce uint6
 }
 
 func (p *PostgresStorage) AddUser(ctx context.Context, am AccountMapping, dbTx pgx.Tx) error {
-	addSQL := "INSERT INTO omni.user (owner, account, salt, create_at) VALUES ($1, $2, $3, $4);"
+	addSQL := "INSERT INTO omni.user (owner, account, salt, failed_salt, create_at) VALUES ($1, $2, $3, $4, $5);"
 	e := p.getExecQuerier(dbTx)
-	_, err := e.Exec(ctx, addSQL, am.User.Hex(), am.Account.Hex(), am.Salt, time.Now())
+	_, err := e.Exec(ctx, addSQL, am.User.Hex(), am.Account.Hex(), am.Salt, "", time.Now())
 	return err
 }
 
@@ -201,37 +192,8 @@ func (p *PostgresStorage) GetAccountAdr(ctx context.Context, owner string, dbTx 
 	return &acc, nil
 }
 
-type Operation struct {
-	ID                    uint64    `json:"id"`
-	UserID                uint64    `json:"user_id"`
-	Status                uint64    `json:"status"`
-	Signature             string    `json:"signature"`
-	Did                   string    `json:"did"`
-	OperationType         uint      `json:"operation_type"`
-	OperationValue        string    `json:"operation_value"`
-	Phase                 uint      `json:"phase"`
-	ExecNonce             uint64    `json:"exec_nonce"`
-	ExecNetworkID         uint64    `json:"exec_network_id"`
-	ExecCalldata          []byte    `json:"exec_calldata"`
-	ExecMainGasLimit      uint64    `json:"exec_main_gas_limit"`
-	ExecMainGasPrice      string    `json:"exec_main_gas_price"`
-	ExecZkpGasLimit       uint64    `json:"exec_zkp_gas_limit"`
-	ExecDestGasLimit      uint64    `json:"exec_dest_gas_limit"`
-	ExecDestGasPrice      string    `json:"exec_dest_gas_price"`
-	InnerExecNonce        uint64    `json:"inner_exec_nonce"`
-	InnerExecNetworkID    uint64    `json:"inner_exec_network_id"`
-	InnerExecCalldata     []byte    `json:"inner_exec_calldata"`
-	InnerExecMainGasLimit uint64    `json:"inner_exec_main_gas_limit"`
-	InnerExecMainGasPrice string    `json:"inner_exec_main_gas_price"`
-	InnerExecZkpGasLimit  uint64    `json:"inner_exec_zkp_gas_limit"`
-	InnerExecDestGasLimit uint64    `json:"inner_exec_dest_gas_limit"`
-	InnerExecDestGasPrice string    `json:"inner_exec_dest_gas_price"`
-	CreatedAt             time.Time `json:"create_at"`
-	UpdatedAt             time.Time `json:"update_at"`
-}
-
 func (p *PostgresStorage) GetUserOps(ctx context.Context, uid uint64, dbTx pgx.Tx) ([]*pool.UserOperation, error) {
-	const getSQL = `SELECT * FROM omni.operation o WHERE o.user_id = $1 ORDER BY id ASC;`
+	const getSQL = `SELECT * FROM omni.operation WHERE user_id = $1 ORDER BY id ASC;`
 	e := p.getExecQuerier(dbTx)
 	rows, err := e.Query(ctx, getSQL, uid)
 	if err != nil {
@@ -258,7 +220,7 @@ func scanOperation(row pgx.Row) (*pool.UserOperation, error) {
 		signature string
 	)
 	err := row.Scan(
-		&op.OpId, &op.Uid, &op.Status, &signature, &op.Did, &op.OperationType, &op.OperationValue,
+		&op.OpId, &op.Uid， &op.BatchNum, &op.Status, &signature, &op.Did, &op.OperationType, &op.OperationValue,
 		&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 		&op.Exec.MainChainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 		&op.Exec.DestChainGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
@@ -275,7 +237,7 @@ func scanOperation(row pgx.Row) (*pool.UserOperation, error) {
 func (p *PostgresStorage) GetSigleUserOp(ctx context.Context, owner, account,
 	did string, status int, dbTx pgx.Tx) (*pool.UserOperation, error) {
 	const getSQL = `
-		SELECT * FROM omni.user u 
+		SELECT o.* FROM omni.user u 
 		LEFT JOIN omni.operation o ON o.user_id = u.id 
 		WHERE u.owner = $1 AND u.account = $2 AND o.did = $3 AND status = $4 LIMIT 1;
 	`
@@ -290,7 +252,7 @@ func (p *PostgresStorage) AddOperation(ctx context.Context, uid uint64, uo *pool
 	e := p.getExecQuerier(dbTx)
 	addSQL := `
 		INSERT INTO omni.operation (
-			user_id, status, signature, did, operation_type, operation_value, phase,
+			user_id,, status, signature, did, operation_type, operation_value, phase,
 			exec_nonce, exec_network_id, exec_calldata, exec_main_gas_limit, exec_main_gas_price,
 			exec_zkp_gas_limit, exec_dest_gas_limit, exec_dest_gas_price,
 			inner_exec_nonce, inner_exec_network_id, inner_exec_calldata, inner_exec_main_gas_limit,

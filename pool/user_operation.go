@@ -61,6 +61,7 @@ type UserOperation struct {
 	InnerExec      ExecData       `json:"innerExec"`
 	Phase          uint8          `json:"phase"`
 	Status         uint8          `json:"status"`
+	BatchNum       uint64         `json:"batch_num"`
 	TimeAt         time.Time      `json:"time_at"`
 }
 

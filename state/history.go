@@ -164,7 +164,7 @@ func (h *HistoryManager) UpdateAccountHis(tx string, op *pool.UserOperation) {
 }
 
 func (h *HistoryManager) SaveAccountHis(owner, account common.Address, data *types.AccountHistory) error {
-	user, err := h.storage.Account.GetAccount(owner, account)
+	/*user, err := h.storage.Account.GetAccount(owner, account)
 	if err != nil || user == nil {
 		log.Errorf("get account(%s, %s) no data, error: %v", owner, account, err)
 		return fmt.Errorf("get account(%s, %s) no data", owner, account)
@@ -183,7 +183,7 @@ func (h *HistoryManager) SaveAccountHis(owner, account common.Address, data *typ
 		return err
 	}
 	h.txMgr.lock.Unlock()
-	h.chHis <- data
+	h.chHis <- data*/
 	return nil
 }
 
@@ -265,7 +265,7 @@ func (tm *HisInfra) DelExistHis(his *types.AccountHistory) error {
 }
 
 func (tm *HisInfra) AddHisPage(his *types.AccountHistory) error {
-	tm.lock.Lock()
+	/*tm.lock.Lock()
 	defer tm.lock.Unlock()
 	user, err := tm.state.storage.Account.GetAccount(common.HexToAddress(his.Owner), common.HexToAddress(his.Account))
 	if err != nil || user == nil {
@@ -294,7 +294,8 @@ func (tm *HisInfra) AddHisPage(his *types.AccountHistory) error {
 	if err != nil {
 		log.Errorf("add accidx history: %+v, error: %v", his, err)
 	}
-	return err
+	return err*/
+	return nil
 }
 
 func (tm *HisInfra) AddHisAccIndex(his *types.AccountHistory, page uint64) error {

@@ -65,7 +65,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	}
 
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(ctx, poolInstance, ethereum, st, levelDB, storage)
+	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, st, levelDB, storage)
 	if err != nil {
 		return nil, err
 	}

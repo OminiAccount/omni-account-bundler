@@ -12,7 +12,6 @@ import (
 )
 
 type Synchronizer struct {
-	pool      types.PoolInterface
 	ether     types.EthereumInterface
 	state     types.StateInterface
 	ctx       context.Context
@@ -21,11 +20,10 @@ type Synchronizer struct {
 	db        *PostgresStorage
 }
 
-func NewSynchronizer(ctx context.Context, p types.PoolInterface, ethereum types.EthereumInterface,
+func NewSynchronizer(ctx context.Context, ethereum types.EthereumInterface,
 	state types.StateInterface, db ethdb.Database, pg *pgxpool.Pool) (*Synchronizer, error) {
 	syncCtx, cancel := context.WithCancel(ctx)
 	return &Synchronizer{
-		pool:      p,
 		ether:     ethereum,
 		state:     state,
 		ctx:       syncCtx,

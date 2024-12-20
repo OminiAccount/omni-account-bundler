@@ -11,11 +11,6 @@ import (
 )
 
 type (
-	PoolInterface interface {
-		AddSignedUserOperation(op *pool.SignedUserOperation)
-		AddStepUserOperation(op *pool.SignedUserOperation)
-	}
-
 	EthereumInterface interface {
 		GetChains() map[chains.ChainId]*etherman.EthereumClient
 	}

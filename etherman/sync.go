@@ -62,7 +62,7 @@ func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumCl
 		}
 		cliSync.genBlockNumber = header.Number.Uint64()
 	}
-	cliSync.db.SetChain(ctx, uint64(cliSync.networkID), cliSync.genBlockNumber, "block_id", nil)
+	_ = cliSync.db.SetChain(ctx, uint64(cliSync.networkID), cliSync.genBlockNumber, "block_id", nil)
 	return cliSync, nil
 }
 
@@ -80,7 +80,7 @@ func (s *ClientSynchronizer) Sync() {
 		select {
 		case <-s.ctx.Done():
 			log.Infof("NetworkID: %d, synchronizer ctx done", s.networkID)
-			s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
+			_ = s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
 			return
 		case <-time.After(waitDuration):
 			log.Infof("NetworkID: %d, syncing...", s.networkID)
@@ -89,7 +89,7 @@ func (s *ClientSynchronizer) Sync() {
 			if err != nil {
 				log.Errorf("networkID: %d, error syncing blocks: %+v", s.networkID, err)
 			}
-			s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
+			_ = s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
 			if !s.synced {
 				header, err := s.etherCli.Cli().HeaderByNumber(s.ctx, nil)
 				if err != nil {
