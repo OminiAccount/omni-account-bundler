@@ -79,13 +79,13 @@ func (s *State) GetSignedUserOp(user, account common.Address, id string) (*pool.
 	return nil, nil
 }
 
-func (s *State) GetAccountAdrs(user common.Address) *[]common.Address {
+func (s *State) GetAccountAdrs(user common.Address) *common.Address {
 	accountsInfo := s.storage.Account.GetAccountsForUser(user)
 	var accounts []common.Address
 	for account := range accountsInfo {
 		accounts = append(accounts, account)
 	}
-	return &accounts
+	return &accounts[0]
 }
 
 func (s *State) GetAccountInfo(user common.Address) (*common.Address, *types.AccountInfo) {

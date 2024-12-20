@@ -51,7 +51,7 @@ func (e *EthEndpoints) SetBatchProofResult(result state.ProofResult) error {
 func (e *EthEndpoints) CreateUserAccount(user common.Address) interface{} {
 	adr, _ := e.state.GetAccountInfo(user)
 	if adr != nil {
-		return fmt.Errorf("account already exist")
+		return adr
 	}
 	return e.state.CreateAccount(user)
 }
