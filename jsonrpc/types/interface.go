@@ -11,9 +11,10 @@ type StateInterface interface {
 	GetBatchProof() ([]state.Batch, error)
 	SetBatchProofResult(*state.ProofResult) error
 	GetAccountAdrs(common.Address) *[]common.Address
-	GetAccountInfoByAA(common.Address, common.Address) (*types.AccountInfo, error)
-	GetAccountInfo(common.Address) (*common.Address, *types.AccountInfo)
-	AddSignedUserOperation(*pool.SignedUserOperation) error
+	GetAccountInfo(common.Address, common.Address) (*state.AccountInfo, error)
+	GetAccountOps(uid uint64) ([]*pool.UserOperation, error)
+	GetAccountAdr(common.Address) *common.Address
+	AddSignedUserOp(*state.AccountInfo, *pool.SignedUserOperation) error
 	CreateAccount(common.Address) *common.Address
 }
 

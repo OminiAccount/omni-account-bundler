@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/OAB/config"
 	"github.com/OAB/database/leveldb"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
@@ -31,6 +32,12 @@ var processor *Processor
 func NewProcessor(cfg *config.Config) (*Processor, error) {
 	ctx := context.Background()
 
+	storage, err := pgstorage.NewPostgresStorage(cfg.Db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Info("DB successfully initialized")
+
 	// Connect to levelDB
 	levelDBDir, err := filepath.Abs("./db")
 	if _, err = utils.PathExists(levelDBDir); err != nil {
@@ -42,23 +49,23 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	}
 
 	// pool
-	poolInstance := pool.NewMemoryPool(cfg.Pool, levelDB)
+	poolInstance := pool.NewMemoryPool(cfg.Pool, levelDB, storage)
 	log.Info("Pool successfully initialized")
 
 	// Ethereum
-	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, levelDB)
+	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, storage)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Ethereum successfully initialized")
 
-	st, err := state.NewState(ctx, cfg.State, poolInstance, ethereum, levelDB)
+	st, err := state.NewState(ctx, cfg.State, poolInstance, ethereum, levelDB, storage)
 	if err != nil {
 		return nil, err
 	}
 
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(poolInstance, ethereum, st, levelDB)
+	sync, err := synchronizer.NewSynchronizer(ctx, poolInstance, ethereum, st, levelDB, storage)
 	if err != nil {
 		return nil, err
 	}

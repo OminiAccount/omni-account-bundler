@@ -7,14 +7,13 @@ import (
 	"github.com/OAB/state/types"
 	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/jackc/pgx/v4"
 )
 
 type (
 	PoolInterface interface {
 		AddSignedUserOperation(op *pool.SignedUserOperation)
 		AddStepUserOperation(op *pool.SignedUserOperation)
-		AddTicket(ticket *pool.TicketFull)
-		GetTicket(id string) *pool.TicketFull
 	}
 
 	EthereumInterface interface {
@@ -22,10 +21,11 @@ type (
 	}
 
 	StateInterface interface {
-		InitAccountNonce(chains.ChainId, types.AccountMapping)
-		AddNewMapping(mapping types.AccountMapping) error
-		AddAccountGas(*pool.SignedUserOperation) error
-		GetSignedUserOp(common.Address, common.Address, string) (*pool.SignedUserOperation, error)
+		UpdateUserOpStatus(uint64, int, pgx.Tx) error
+		UpdateUserOpPhase(uint64, int, pgx.Tx) error
+		CreateAccountInfo(chains.ChainId, types.AccountMapping)
+		AddAccountGas(*pool.SignedUserOperation, pgx.Tx) error
+		GetSignedUserOp(common.Address, common.Address, string, int) (*pool.SignedUserOperation, error)
 		GetHisIns() *state.HistoryManager
 	}
 )

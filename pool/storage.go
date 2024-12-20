@@ -12,7 +12,6 @@ var (
 
 type Storage struct {
 	UserOps []*SignedUserOperation
-	Tickets map[string]*TicketFull
 
 	db ethdb.Database
 }
@@ -20,23 +19,11 @@ type Storage struct {
 func NewStorage(db ethdb.Database) *Storage {
 	return &Storage{
 		UserOps: []*SignedUserOperation{},
-		Tickets: map[string]*TicketFull{},
 		db:      db,
 	}
 }
 
-func (s *Storage) addTicket(ticket *TicketFull) {
-	s.Tickets[ticket.Did] = ticket
-}
-
-func (s *Storage) getTicket(id string) *TicketFull {
-	return s.Tickets[id]
-}
-
 func (s *Storage) addUserOp(userOp *SignedUserOperation) {
-	if userOp.OperationType == DepositAction {
-		delete(s.Tickets, userOp.Did)
-	}
 	s.UserOps = append(s.UserOps, userOp)
 }
 
@@ -77,7 +64,6 @@ func (s *Storage) loadUserOps() error {
 			return err
 		}
 		s.UserOps = decodeSigUserOps.UserOps
-		s.Tickets = decodeSigUserOps.Tickets
 
 		log.Info("load cache userOps length ", len(s.UserOps))
 	}

@@ -13,9 +13,6 @@ import (
 
 type (
 	PoolInterface interface {
-		AddTicket(ticket *pool.TicketFull)
-		GetTicket(string) *pool.TicketFull
-		AddSignedUserOperation(op *pool.SignedUserOperation)
 		BatchContext() chan *pool.BatchContext
 		Cache() error
 		LoadCache()

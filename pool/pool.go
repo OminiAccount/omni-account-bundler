@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"sync"
 	"time"
 )
@@ -17,9 +18,10 @@ type Pool struct {
 	cancelCtx     context.CancelFunc
 
 	storage *Storage
+	db      *PostgresStorage
 }
 
-func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
+func NewMemoryPool(cfg Config, db ethdb.Database, pg *pgxpool.Pool) *Pool {
 	ctx, cancel := context.WithCancel(context.Background())
 	pool := &Pool{
 		ctx:           ctx,
@@ -28,40 +30,12 @@ func NewMemoryPool(cfg Config, db ethdb.Database) *Pool {
 		lastFlushTime: time.Now(),
 		batchCtx:      make(chan *BatchContext, 100),
 		storage:       NewStorage(db),
+		db:            NewPostgresStorage(pg),
 	}
 
 	pool.LoadCache()
 
 	return pool
-}
-
-func (p *Pool) AddTicket(ticket *TicketFull) {
-	p.mu.Lock()
-	log.Infof("Add a new ticket: %+v", ticket)
-	p.storage.addTicket(ticket)
-	p.mu.Unlock()
-}
-
-func (p *Pool) GetTicket(id string) *TicketFull {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.storage.getTicket(id)
-}
-
-func (p *Pool) AddSignedUserOperation(op *SignedUserOperation) {
-	p.mu.Lock()
-	log.Infof("Add a new sign userOperation: %+v %+v", op.Signature, op.UserOperation)
-	p.storage.addUserOp(op)
-	p.mu.Unlock()
-	//p.CheckFlush()
-}
-
-func (p *Pool) AddStepUserOperation(op *SignedUserOperation) {
-	p.mu.Lock()
-	log.Infof("Add a new step userOperation: %+v", op)
-	p.storage.addUserOp(op)
-	p.mu.Unlock()
-	p.CheckFlush(true)
 }
 
 func (p *Pool) CheckFlush(flag bool) {

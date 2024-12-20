@@ -2,11 +2,9 @@ package etherman
 
 import (
 	"context"
-	"fmt"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
-	"github.com/OAB/utils/packutils"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"time"
 )
 
@@ -26,7 +24,7 @@ type Synchronizer interface {
 type ClientSynchronizer struct {
 	ctx            context.Context
 	etherCli       *EthereumClient
-	storage        ethdb.Database
+	db             *PostgresStorage
 	genBlockNumber uint64
 	networkID      chains.ChainId
 	synced         bool
@@ -38,10 +36,10 @@ type ClientSynchronizer struct {
 	eoFunc  ExecOpFunc
 }
 
-func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumClient,
+func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumClient,
 	acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc, wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
-		storage:        db,
+		db:             NewPostgresStorage(db),
 		etherCli:       etherCli,
 		ctx:            ctx,
 		genBlockNumber: etherCli.cfg.GenBlockNumber,
@@ -52,17 +50,10 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		wtFunc:         wtFunc,
 		eoFunc:         eoFunc,
 	}
-	lastBlockSync, err := cliSync.storage.Get(cliSync.chainKey())
-	if err != nil {
-		if err.Error() == LevalDBNotFound {
-			lastBlockSync = []byte{0}
-		} else {
-			log.Fatal("get chain genblock number error: " + err.Error())
-		}
-	}
-	lastBlockSynced := packutils.BytesToUint64(lastBlockSync)
-	if lastBlockSynced > cliSync.genBlockNumber {
-		cliSync.genBlockNumber = lastBlockSynced
+	cliSync.db.AddChainHeight(ctx, uint64(cliSync.networkID), nil)
+	lastBlockSync := cliSync.db.GetChainHeight(ctx, uint64(cliSync.networkID), nil)
+	if lastBlockSync > cliSync.genBlockNumber {
+		cliSync.genBlockNumber = lastBlockSync
 	}
 	if cliSync.genBlockNumber < 1 {
 		header, err := cliSync.etherCli.Cli().HeaderByNumber(context.Background(), nil)
@@ -71,46 +62,34 @@ func NewSynchronizer(ctx context.Context, db ethdb.Database, etherCli *EthereumC
 		}
 		cliSync.genBlockNumber = header.Number.Uint64()
 	}
-	_ = cliSync.storage.Put(cliSync.chainKey(), packutils.Uint64ToBytes(cliSync.genBlockNumber))
+	cliSync.db.SetChain(ctx, uint64(cliSync.networkID), cliSync.genBlockNumber, "block_id", nil)
 	return cliSync, nil
 }
 
 var waitDuration = time.Second
 
-func (s *ClientSynchronizer) chainKey() []byte {
-	return []byte(fmt.Sprintf("chain-sync-%d", s.networkID))
-}
-
 func (s *ClientSynchronizer) Sync() {
 	log.Infof("NetworkID: %d, Synchronization started", s.networkID)
-	lastBlockSync, err := s.storage.Get(s.chainKey())
-	if err != nil {
-		log.Errorf("networkID: %d, unexpected error getting the latest block. Error: %s", s.networkID, err.Error())
+	lastBlockSynced := s.db.GetChainHeight(s.ctx, uint64(s.networkID), nil)
+	if lastBlockSynced < 1 {
+		log.Errorf("networkID: %d, unexpected error getting the latest block.", s.networkID)
 		return
 	}
-	lastBlockSynced := packutils.BytesToUint64(lastBlockSync)
 	log.Infof("NetworkID: %d, initial lastBlockSynced: %+v", s.networkID, lastBlockSynced)
 	for {
 		select {
 		case <-s.ctx.Done():
 			log.Infof("NetworkID: %d, synchronizer ctx done", s.networkID)
-			err = s.storage.Put(s.chainKey(), packutils.Uint64ToBytes(lastBlockSynced))
-			if err != nil {
-				log.Errorf("networkID: %d, put last sync block: %d, error: %+v", s.networkID, lastBlockSynced, err)
-				return
-			}
+			s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
 			return
 		case <-time.After(waitDuration):
 			log.Infof("NetworkID: %d, syncing...", s.networkID)
+			var err error
 			lastBlockSynced, err = s.syncBlocks(lastBlockSynced)
 			if err != nil {
 				log.Errorf("networkID: %d, error syncing blocks: %+v", s.networkID, err)
 			}
-			err = s.storage.Put(s.chainKey(), packutils.Uint64ToBytes(lastBlockSynced))
-			if err != nil {
-				log.Errorf("networkID: %d, put last sync block: %d, error: %+v", s.networkID, lastBlockSynced, err)
-				return
-			}
+			s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
 			if !s.synced {
 				header, err := s.etherCli.Cli().HeaderByNumber(s.ctx, nil)
 				if err != nil {

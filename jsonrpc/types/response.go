@@ -13,7 +13,6 @@ const (
 type AccountInfo struct {
 	Balance        string
 	Nonce          uint64
-	LatestPage     uint64
 	UserOperations []*pool.UserOperation
 }
 

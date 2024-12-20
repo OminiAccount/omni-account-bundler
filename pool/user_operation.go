@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"math/big"
+	"time"
 )
 
 const (
@@ -29,6 +30,12 @@ const (
 
 	PhaseFirst  = 0
 	PhaseSecond = 1
+
+	NormalStatus  = 0
+	PendingStatus = 1
+	BatchStatus   = 2
+	SuccessStatus = 3
+	FailedStatus  = 4
 )
 
 type ExecData struct {
@@ -43,6 +50,8 @@ type ExecData struct {
 }
 
 type UserOperation struct {
+	Uid            uint64         `json:"uid"`
+	OpId           uint64         `json:"op_id"`
 	Did            string         `json:"did"`
 	OperationType  uint8          `json:"operationType"`
 	OperationValue *hexutil.Big   `json:"operationValue"`
@@ -50,7 +59,9 @@ type UserOperation struct {
 	Sender         common.Address `json:"sender"`
 	Exec           ExecData       `json:"exec"`
 	InnerExec      ExecData       `json:"innerExec"`
-	Phase          uint8          `json:"destChainGasPrice"`
+	Phase          uint8          `json:"phase"`
+	Status         uint8          `json:"status"`
+	TimeAt         time.Time      `json:"time_at"`
 }
 
 type SignedUserOperation struct {

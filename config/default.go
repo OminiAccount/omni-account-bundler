@@ -8,6 +8,18 @@ level = "debug"
 file = "/app/log/server.log"
 outputs = ["stderr"]
 
+[database]
+host = "127.0.0.1"
+user = "test_user"
+password = "test_password"
+name = "onmi_bundler_db"
+port = "5432"
+max-conns = 100
+enable-log = true
+log-file = "./log/db.log"
+log-level = "debug"
+log-slow-time = 50
+
 [ethereum]
 [ethereum.vizing]
 chain-id = 28516
@@ -30,5 +42,6 @@ max-ops = 2
 flush-interval = 0
 
 [state]
+vizing-chain-id = 28516
 max-batches = 10
 `

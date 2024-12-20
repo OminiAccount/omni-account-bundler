@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
 	"github.com/OAB/utils/db"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"math/big"
 	"time"
 )
@@ -26,12 +28,14 @@ type State struct {
 	storage  *Storage
 	tree     *merkletree.SMT
 	his      *HistoryManager
+	db *PostgresStorage
 
 	proofQueue  *queue.ConcurrentQueue[Batch]
 	provenQueue *queue.ConcurrentQueue[ProofResult]
 }
 
-func NewState(ctx context.Context, cfg Config, pool PoolInterface, ether EthereumInterface, ethDb ethdb.Database) (*State, error) {
+func NewState(ctx context.Context, cfg Config, pool PoolInterface,
+	ether EthereumInterface, ethDb ethdb.Database, pg *pgxpool.Pool) (*State, error) {
 	stateCtx, cancel := context.WithCancel(ctx)
 	state := &State{
 		cfg:         cfg,
@@ -43,6 +47,7 @@ func NewState(ctx context.Context, cfg Config, pool PoolInterface, ether Ethereu
 		proofQueue:  queue.NewConcurrentQueue[Batch](),
 		provenQueue: queue.NewConcurrentQueue[ProofResult](),
 		storage:     NewStorage(ethDb),
+		db: NewPostgresStorage(pg),
 	}
 	state.his = NewHistoryManager(ctx, cfg, state)
 
@@ -66,7 +71,7 @@ func (s *State) Start() {
 		testPrk := "82693fc767eb00e3288a01b7516f3a98269882e951be74403e4061d898ea0929"
 		testUser := common.HexToAddress("0x7c38C1646213255f62dB509688B8fA062e0Ed8e4")
 		var testAcc *common.Address
-		adr, _ := s.GetAccountInfo(testUser)
+		adr := s.GetAccountAdr(testUser)
 		if adr != nil {
 			testAcc = adr
 		} else {
@@ -76,7 +81,7 @@ func (s *State) Start() {
 			// deposit
 			time.Sleep(time.Minute)
 			log.Infof("add test deposit...")
-			_, accInfo := s.GetAccountInfo(testUser)
+			accInfo, _ := s.GetAccountInfo(testUser, *testAcc)
 			suo := &pool.SignedUserOperation{
 				UserOperation: &pool.UserOperation{
 					Owner:          testUser,
@@ -85,7 +90,7 @@ func (s *State) Start() {
 					Sender:         *testAcc,
 					Exec: pool.ExecData{
 						ChainId:                28516,
-						Nonce:                  hexutil.Uint64(accInfo.Nonce[28516]+1),
+						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce+1),
 						CallData:               hexutil.Bytes(""),
 						MainChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
 						MainChainGasLimit:      hexutil.Uint64(10),
@@ -116,7 +121,7 @@ func (s *State) Start() {
 			// withdraw
 			time.Sleep(time.Minute * 10)
 			log.Infof("add test withdraw...")
-			_, accInfo = s.GetAccountInfo(testUser)
+			accInfo, _ = s.GetAccountInfo(testUser, *testAcc)
 			suo2 := &pool.SignedUserOperation{
 				UserOperation: &pool.UserOperation{
 					Owner:          testUser,
@@ -125,7 +130,7 @@ func (s *State) Start() {
 					Sender:         *testAcc,
 					Exec: pool.ExecData{
 						ChainId:                28516,
-						Nonce:                  hexutil.Uint64(accInfo.Nonce[28516]+1),
+						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce+1),
 						CallData:               hexutil.Bytes(""),
 						MainChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
 						MainChainGasLimit:      hexutil.Uint64(10),

@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"github.com/0xPolygonHermez/zkevm-bridge-service/db"
 	"github.com/OAB/config"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/processor"
 	"github.com/OAB/utils/log"
 	"github.com/urfave/cli/v2"
@@ -33,11 +35,16 @@ var (
 func runProcessor(ctx *cli.Context) error {
 	conf, err := config.Load(ctx)
 	if err != nil {
-		panic("Failed to load config, error:"+err.Error())
+		panic("Failed to load config, error:" + err.Error())
 	}
 	log.Init(conf.Log)
 	log.Infof("%+v", conf)
 	log.Info("Starting OAB processor")
+
+	err = pgstorage.RunMigrationsUp(conf.Db)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	proc, err := processor.NewProcessor(conf)
 	if err != nil {
@@ -66,7 +73,7 @@ func waitElegantExit(signalChan chan os.Signal, proc *processor.Processor) {
 	s := <-signalChan
 	log.Infof("receive exit signal: %v", s)
 	proc.Stop()
-	time.Sleep(time.Second*5)
+	time.Sleep(time.Second * 5)
 	os.Exit(0)
 }
 

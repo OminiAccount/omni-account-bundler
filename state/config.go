@@ -1,5 +1,6 @@
 package state
 
 type Config struct {
-	MaxBatches int `mapstructure:"max-batches"`
+	VizingChainID uint64 `mapstructure:"vizing-chain-id"`
+	MaxBatches    int    `mapstructure:"max-batches"`
 }

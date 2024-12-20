@@ -3,6 +3,7 @@ package etherman
 import (
 	"context"
 	"fmt"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/lib/common/hexutil"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"math/big"
 	"time"
 )
@@ -25,18 +27,18 @@ type EtherMan struct {
 	cancel       func()
 	cfg          Config
 	chainsClient map[chains.ChainId]*EthereumClient
-	db           ethdb.Database
+	db           *PostgresStorage
 }
 
 // NewEthereum create a EthereumClient that support multiple chains
-func NewEthereum(ctx context.Context, cfg Config, ethDb ethdb.Database) (*EtherMan, error) {
+func NewEthereum(ctx context.Context, cfg Config, pg *pgxpool.Pool) (*EtherMan, error) {
 	etherCtx, cancel := context.WithCancel(ctx)
 	em := &EtherMan{
 		ctx:          etherCtx,
 		cancel:       cancel,
 		cfg:          cfg,
 		chainsClient: make(map[chains.ChainId]*EthereumClient, chains.MaxChainInfoLength),
-		db:           ethDb,
+		db:           NewPostgresStorage(pg),
 	}
 	var nw = []Network{
 		cfg.VizingNetwork,
@@ -118,34 +120,22 @@ func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint
 	ccli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	ccli.lock.Lock()
 	defer ccli.lock.Unlock()
-	var salt uint64
-	chainSaltKey := fmt.Sprintf(SaltKey, uint64(ccli.chainID))
-	has, err := ether.db.Has([]byte(chainSaltKey))
+	dbTx, err := ether.db.BeginDBTransaction(ether.ctx)
 	if err != nil {
-		log.Errorf("[CreateAccount] read db err: %+v", err)
-		return nil, salt
+		log.Errorf("use db transaction err: %+v", err)
+		return nil, 0
 	}
-	if has {
-		data, err := ether.db.Get([]byte(chainSaltKey))
-		if err != nil {
-			log.Errorf("[CreateAccount] from db get data err: %+v", err)
-			return nil, salt
-		}
-		salt = packutils.BytesToUint64(data)
-	}
+	salt := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), dbTx)
 	log.Infof("[CreateAccount] chainID: %d, salt: %d", ccli.chainID, salt)
 	opts := new(bind.CallOpts)
 	opts.From = ccli.sender
 	adr, err := ccli.aaFactory.GetAccountAddress(opts, user, big.NewInt(0).SetUint64(salt))
 	if err != nil {
+		_ = dbTx.Rollback(ether.ctx)
 		log.Errorf("get create account err: %+v", err)
 		return nil, salt
 	}
-	err = ether.db.Put([]byte(chainSaltKey), packutils.Uint64ToBytes(salt))
-	if err != nil {
-		log.Errorf("put salt key to db err: %+v", err)
-		return nil, salt
-	}
+	ether.db.SetChain(ether.ctx, uint64(ccli.chainID), salt+1, "salt", dbTx)
 	for _, cli := range ether.chainsClient {
 		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
 	}
