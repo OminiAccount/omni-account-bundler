@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/0xPolygonHermez/zkevm-bridge-service/db"
 	"github.com/OAB/config"
 	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/processor"
@@ -73,7 +72,7 @@ func waitElegantExit(signalChan chan os.Signal, proc *processor.Processor) {
 	s := <-signalChan
 	log.Infof("receive exit signal: %v", s)
 	proc.Stop()
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 1)
 	os.Exit(0)
 }
 

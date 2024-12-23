@@ -1,15 +1,16 @@
 package state
 
 import (
+	"errors"
 	"fmt"
-	"github.com/OAB/pool"
-	"github.com/OAB/state/types"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
+	"github.com/OAB/utils/packutils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/jackc/pgx/v4"
 	"math/big"
+	"time"
 )
 
 type AccountMapping struct {
@@ -32,7 +33,80 @@ type AccountInfo struct {
 	Chain   map[uint64]ChainInfo
 }
 
-func (s *State) CreateAccountInfo(chainID chains.ChainId, am types.AccountMapping) {
+type Token struct {
+	Address  string `json:"address"`
+	Decimals int    `json:"decimals"`
+	Symbol   string `json:"symbol"`
+	Name     string `json:"name"`
+	Logo     string `json:"logo"`
+}
+
+type HistoryDetail struct {
+	Token   Token  `json:"token"`
+	Address string `json:"address"`
+	Value   string `json:"value"`
+}
+
+type AccountHistory struct {
+	ID          uint64        `json:"id"`
+	Uid         uint64        `json:"uid"`
+	Did         string        `json:"did"`
+	OrderType   uint8         `json:"orderType"`
+	From        HistoryDetail `json:"from"`
+	To          HistoryDetail `json:"to"`
+	SourceChain uint64        `json:"sourceChain"`
+	TargetChain uint64        `json:"targetChain"`
+	SourceHash  string        `json:"sourceHash"`
+	TargetHash  string        `json:"targetHash"`
+	SwapHash    string        `json:"swapHash"`
+	Status      uint64        `json:"status"`
+	TimeAt      time.Time     `json:"timeAt"`
+}
+
+func (a AccountHistory) UniqueID() string {
+	hashBytes := crypto.Keccak256Hash(a.Encode())
+	return hashBytes.Hex()
+}
+
+func (a AccountHistory) Encode() []byte {
+	var b []byte
+	b = append(b, packutils.Uint64ToBytes(a.Uid)...)
+	b = append(b, a.OrderType)
+	b = append(b, packutils.Uint64ToBytes(a.SourceChain)...)
+	b = append(b, packutils.Uint64ToBytes(a.TargetChain)...)
+	b = append(b, common.LeftPadBytes(common.HexToAddress(a.From.Address).Bytes(), 32)...)
+	b = append(b, common.LeftPadBytes(common.Hex2Bytes(a.From.Value), 32)...)
+	b = append(b, common.LeftPadBytes(common.HexToAddress(a.To.Address).Bytes(), 32)...)
+	b = append(b, common.LeftPadBytes(common.Hex2Bytes(a.To.Value), 32)...)
+	return b
+}
+
+func ToUserOperationHis(tx string, op *UserOperation) AccountHistory {
+	uoHis := AccountHistory{
+		Uid:       op.Uid,
+		Did:       op.Did,
+		OrderType: op.OperationType,
+		From: HistoryDetail{
+			Address: op.Sender.Hex(),
+			Value:   op.OperationValue.String(),
+		},
+		SourceChain: op.Exec.ChainId.Uint64(),
+		SourceHash:  tx,
+		To: HistoryDetail{
+			Address: op.Sender.Hex(),
+			Value:   op.OperationValue.String(),
+		},
+		TargetChain: op.Exec.ChainId.Uint64(),
+		TargetHash:  tx,
+		TimeAt:      time.Now(),
+	}
+	if op.Status == SuccessStatus {
+		uoHis.Status = CheckSuccessStatus
+	}
+	return uoHis
+}
+
+func (s *State) CreateAccountInfo(chainID chains.ChainId, am AccountMapping) {
 	ui, err := s.db.GetUserInfoByAA(s.ctx, am.User.Hex(), am.Account.Hex(), nil)
 	if err != nil {
 		log.Errorf("[CreateAccountInfo] chainID: %d, user: %+v, err: %+v", chainID, am, err)
@@ -45,22 +119,26 @@ func (s *State) CreateAccountInfo(chainID chains.ChainId, am types.AccountMappin
 	}
 }
 
-func (s *State) AddSignedUserOp(ai *AccountInfo, suop *pool.SignedUserOperation) error {
-	if suop.OperationType == pool.DepositAction {
+func getDepositID(suop *SignedUserOperation) string {
+	var encodeBytes []byte
+	encodeBytes = append(encodeBytes, suop.Sender.Bytes()...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(suop.Exec.ChainId)).Bytes(), 32)...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(suop.Exec.Nonce)).Bytes(), 32)...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(suop.OperationValue.ToInt().Bytes(), 32)...)
+	return crypto.Keccak256Hash(encodeBytes).Hex()
+}
+
+func (s *State) AddSignedUserOp(ai *AccountInfo, suop *SignedUserOperation) error {
+	if suop.OperationType == DepositAction {
 		if suop.Did == "" {
-			var encodeBytes []byte
-			encodeBytes = append(encodeBytes, suop.Sender.Bytes()...)
-			encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(suop.Exec.ChainId)).Bytes(), 32)...)
-			encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(suop.Exec.Nonce)).Bytes(), 32)...)
-			encodeBytes = append(encodeBytes, common.LeftPadBytes(suop.OperationValue.ToInt().Bytes(), 32)...)
-			suop.Did = crypto.Keccak256Hash(encodeBytes).Hex()
+			suop.Did = getDepositID(suop)
 			log.Infof("deposit did: %s", suop.Did)
 		}
 	} else if suop.Did == "" {
 		hashBytes := crypto.Keccak256Hash(suop.Encode())
 		suop.Did = hashBytes.Hex()
 		log.Infof("signedUserOperation did: %s", suop.Did)
-		suop.Status = pool.PendingStatus
+		suop.Status = PendingStatus
 	}
 	dbTx, err := s.db.BeginDBTransaction(s.ctx)
 	if err != nil {
@@ -73,7 +151,7 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *pool.SignedUserOperation)
 		_ = dbTx.Rollback(s.ctx)
 		return err
 	}
-	if suop.OperationType == pool.WithdrawAction {
+	if suop.OperationType == WithdrawAction {
 		if tGas.Cmp(suop.OperationValue.ToInt()) < 0 {
 			_ = dbTx.Rollback(s.ctx)
 			return fmt.Errorf("gas insufficient")
@@ -81,7 +159,7 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *pool.SignedUserOperation)
 			tGas = tGas.Sub(tGas, suop.OperationValue.ToInt())
 		}
 	}
-	if suop.OperationType != pool.DepositAction {
+	if suop.OperationType != DepositAction {
 		usedGas := suop.UserOperation.CalculateGasUsed()
 		if tGas.Cmp(usedGas) < 0 {
 			_ = dbTx.Rollback(s.ctx)
@@ -132,7 +210,7 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *pool.SignedUserOperation)
 	return err
 }
 
-func (s *State) AddAccountGas(suop *pool.SignedUserOperation, dbTx pgx.Tx) error {
+func (s *State) AddAccountGas(suop *SignedUserOperation, dbTx pgx.Tx) error {
 	var (
 		err  error
 		flag bool
@@ -178,18 +256,20 @@ func (s *State) UpdateUserOpPhase(opid uint64, phase int, dbTx pgx.Tx) error {
 	return err
 }
 
-func (s *State) GetSignedUserOp(user, account common.Address, did string, status int) (*pool.SignedUserOperation, error) {
+func (s *State) GetSignedUserOp(user, account common.Address, did string, status int) (*SignedUserOperation, error) {
 	op, err := s.db.GetSigleUserOp(s.ctx, user.Hex(), account.Hex(), did, status, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &pool.SignedUserOperation{UserOperation: op}, nil
+	return &SignedUserOperation{UserOperation: op}, nil
 }
 
 func (s *State) GetAccountAdr(user common.Address) *common.Address {
 	adr, err := s.db.GetAccountAdr(s.ctx, user.Hex(), nil)
 	if err != nil {
-		log.Errorf("GetAccountAdr, user: %s, get user account adr err: %+v", user, err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Errorf("GetAccountAdr, user: %s, get user account adr err: %+v", user, err)
+		}
 		return nil
 	}
 	return adr
@@ -204,7 +284,7 @@ func (s *State) GetAccountInfo(user, account common.Address) (*AccountInfo, erro
 	return ai, nil
 }
 
-func (s *State) GetAccountOps(uid uint64) ([]*pool.UserOperation, error) {
+func (s *State) GetAccountOps(uid uint64) ([]*UserOperation, error) {
 	uos, err := s.db.GetUserOps(s.ctx, uid, nil)
 	if err != nil {
 		log.Errorf("GetAccountOps, user id: %d, get user op err: %+v", uid, err)
@@ -225,8 +305,15 @@ func (s *State) CreateAccount(user common.Address) *common.Address {
 		Salt:    salt,
 	}, nil)
 	if err != nil {
-		log.Error("Add a new account mapping error", "error", err)
+		log.Errorf("Add a new account mapping err: %+v", err)
 	}
 	log.Infof("[CreateAccount] add new account success %s", adr)
 	return adr
+}
+
+func (s *State) AddFailedCreateAA(uid, nid uint64) {
+	err := s.db.AddUserFailedSalt(s.ctx, uid, nid, nil)
+	if err != nil {
+		log.Errorf("Add user failed salt, uid: %d, nid: %d err: %+v", uid, nid, err)
+	}
 }

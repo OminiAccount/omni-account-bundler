@@ -67,7 +67,7 @@ func (p *PostgresStorage) BeginDBTransaction(ctx context.Context) (pgx.Tx, error
 }
 
 func (p *PostgresStorage) AddChainHeight(ctx context.Context, nid uint64, dbTx pgx.Tx) {
-	addSQL := `INSERT INTO omni.chain_height (network_id, block_id, salt, create_at, update_at) VALUES ($1, $2, $3, $4);`
+	addSQL := `INSERT INTO omni.chain_height (network_id, block_id, salt, create_at, update_at) VALUES ($1, $2, $3, $4, $5);`
 	e := p.getExecQuerier(dbTx)
 	_, _ = e.Exec(ctx, addSQL, nid, 0, 0, time.Now(), time.Now())
 }
@@ -81,9 +81,10 @@ func (p *PostgresStorage) GetChainHeight(ctx context.Context, nid uint64, dbTx p
 }
 
 func (p *PostgresStorage) SetChain(ctx context.Context, nid, val uint64, col string, dbTx pgx.Tx) error {
-	getSQL := `UPDATE omni.chain_height SET $1 = $2, update_at = $3 WHERE network_id = $4;`
+	getSQL := "UPDATE omni.chain_height SET %s = $1, update_at = $2 WHERE network_id = $3;"
+	getSQL = fmt.Sprintf(getSQL, col)
 	e := p.getExecQuerier(dbTx)
-	_, err := e.Exec(ctx, getSQL, col, val, time.Now(), nid)
+	_, err := e.Exec(ctx, getSQL, val, time.Now(), nid)
 	return err
 }
 
@@ -108,16 +109,16 @@ func (p *PostgresStorage) UpdateUserFailedSalt(ctx context.Context, user string,
 	var failedSalt string
 	getSQL := `SELECT failed_salt FROM omni.user where owner = $1 FOR UPDATE;`
 	e := p.getExecQuerier(dbTx)
-	err = e.QueryRow(ctx, getSQL, user).Scan(&failedSalt)
+	err = e.QueryRow(ctx, getSQL, strings.ToLower(user)).Scan(&failedSalt)
 	if err != nil {
 		if flag {
 			_ = dbTx.Rollback(ctx)
 		}
 		return err
 	}
+	nidStr := fmt.Sprintf("%d", nid)
 	if len(failedSalt) > 0 {
 		if idDel {
-			nidStr := fmt.Sprintf("%d", nid)
 			cids := strings.Split(failedSalt, ",")
 			for i, cid := range cids {
 				if cid == nidStr {
@@ -126,14 +127,14 @@ func (p *PostgresStorage) UpdateUserFailedSalt(ctx context.Context, user string,
 				}
 			}
 			failedSalt = strings.Join(cids, ",")
-		} else {
-			failedSalt += "," + fmt.Sprintf("%d", nid)
+		} else if !strings.Contains(failedSalt, nidStr) {
+			failedSalt += "," + nidStr
 		}
 	} else if !idDel {
-		failedSalt = fmt.Sprintf("%d", nid)
+		failedSalt = nidStr
 	}
 	updateSQL := `UPDATE omni.user SET failed_salt = $1 where owner = $2;`
-	_, err = e.Exec(ctx, updateSQL, failedSalt, user)
+	_, err = e.Exec(ctx, updateSQL, failedSalt, strings.ToLower(user))
 	if err != nil {
 		if flag {
 			_ = dbTx.Rollback(ctx)
@@ -153,7 +154,7 @@ type UserFailedSalt struct {
 }
 
 func (p *PostgresStorage) GetFailedSalts(ctx context.Context, dbTx pgx.Tx) []UserFailedSalt {
-	getSQL := `SELECT owner, salt, failed_salt FROM omni.user where failed_salt != "";`
+	getSQL := `SELECT owner, salt, failed_salt FROM omni.user where failed_salt != '';`
 	e := p.getExecQuerier(dbTx)
 	rows, err := e.Query(ctx, getSQL)
 	if err != nil {

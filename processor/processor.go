@@ -11,7 +11,9 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/synchronizer"
 	"github.com/OAB/utils"
+	"github.com/OAB/utils/db"
 	"github.com/OAB/utils/log"
+	"github.com/OAB/utils/merkletree"
 	"path/filepath"
 )
 
@@ -48,9 +50,8 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 		return nil, err
 	}
 
-	// pool
-	poolInstance := pool.NewMemoryPool(cfg.Pool, levelDB, storage)
-	log.Info("Pool successfully initialized")
+	// tree
+	tree := merkletree.NewSMT(db.NewMemDb(levelDB), false)
 
 	// Ethereum
 	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, storage)
@@ -59,20 +60,24 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	}
 	log.Info("Ethereum successfully initialized")
 
-	st, err := state.NewState(ctx, cfg.State, poolInstance, ethereum, levelDB, storage)
+	st, err := state.NewState(ctx, cfg.State, tree, ethereum, storage)
 	if err != nil {
 		return nil, err
 	}
 
+	// pool
+	poolIns := pool.NewMemoryPool(cfg.Pool, ethereum, st, storage)
+	log.Info("Pool successfully initialized")
+
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, st, levelDB, storage)
+	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, poolIns, st, levelDB, storage)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Synchronizer successfully initialized")
 
 	// jsonrpc
-	server := createJSONRPCServer(cfg.JsonRpc, st)
+	server := createJSONRPCServer(cfg.JsonRpc, poolIns, st)
 	log.Info("JSONRPCServer successfully initialized")
 
 	processor = &Processor{
@@ -82,7 +87,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 		ethereum:     ethereum,
 		synchronizer: sync,
 		state:        st,
-		pool:         poolInstance,
+		pool:         poolIns,
 	}
 
 	return processor, nil

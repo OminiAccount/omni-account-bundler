@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/OAB/pool"
+	"github.com/OAB/state"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 type AccountInfo struct {
 	Balance        string
 	Nonce          uint64
-	UserOperations []*pool.UserOperation
+	UserOperations []*state.UserOperation
 }
 
 type UserHistory struct {

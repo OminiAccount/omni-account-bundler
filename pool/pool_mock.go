@@ -2,6 +2,7 @@ package pool
 
 import (
 	"fmt"
+	"github.com/OAB/state"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,15 +34,15 @@ func signMessage(dataHash []byte) (signature []byte) {
 	return signature
 }
 
-func CreateUserOps() []*SignedUserOperation {
-	var sus []*SignedUserOperation
+func CreateUserOps() []*state.SignedUserOperation {
+	var sus []*state.SignedUserOperation
 
 	// userOp for deposit 0.2 ether
-	userOpDeposit := UserOperation{
+	userOpDeposit := state.UserOperation{
 		OperationType:  1,
 		OperationValue: (*hexutil.Big)(big.NewInt(100)),
 		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Exec: ExecData{
+		Exec: state.ExecData{
 			Nonce:                  1,
 			ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 			CallData:               common.FromHex("0x"),
@@ -57,7 +58,7 @@ func CreateUserOps() []*SignedUserOperation {
 		dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
 
 		// Sign
-		signedUserOperation := SignedUserOperation{
+		signedUserOperation := state.SignedUserOperation{
 			UserOperation: &userOpDeposit,
 			Signature:     signMessage(dataHash),
 		}
@@ -69,11 +70,11 @@ func CreateUserOps() []*SignedUserOperation {
 	}
 
 	// userOp for withdraw 0.05 ether
-	userOpWithdraw := UserOperation{
+	userOpWithdraw := state.UserOperation{
 		OperationType:  2,
 		OperationValue: (*hexutil.Big)(big.NewInt(100)),
 		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Exec: ExecData{
+		Exec: state.ExecData{
 			Nonce:                  2,
 			ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 			CallData:               common.FromHex("0x"),
@@ -89,7 +90,7 @@ func CreateUserOps() []*SignedUserOperation {
 		dataHash := userOpWithdraw.CalculateEIP712TypeDataHash()
 
 		// Sign
-		signedUserOperation := SignedUserOperation{
+		signedUserOperation := state.SignedUserOperation{
 			UserOperation: &userOpWithdraw,
 			Signature:     signMessage(dataHash),
 		}
@@ -102,11 +103,11 @@ func CreateUserOps() []*SignedUserOperation {
 
 	for i := 0; i < 62; i++ {
 		// userOp for counter contract
-		userOpCounter := UserOperation{
+		userOpCounter := state.UserOperation{
 			OperationType:  0,
 			OperationValue: (*hexutil.Big)(big.NewInt(0)),
 			Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-			Exec: ExecData{
+			Exec: state.ExecData{
 				Nonce:                  hexutil.Uint64(3 + i),
 				ChainId:                hexutil.Uint64(hexTo("0xaa36a7").Uint64()),
 				CallData:               common.FromHex("0xb61d27f6000000000000000000000000c97e73b2770a0eb767407242fb3d35524fe229de000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000004d09de08a00000000000000000000000000000000000000000000000000000000"),
@@ -122,7 +123,7 @@ func CreateUserOps() []*SignedUserOperation {
 			dataHashCounter := userOpCounter.CalculateEIP712TypeDataHash()
 
 			// Sign
-			signedUserOperationCounter := SignedUserOperation{
+			signedUserOperationCounter := state.SignedUserOperation{
 				UserOperation: &userOpCounter,
 				Signature:     signMessage(dataHashCounter),
 			}

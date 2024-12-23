@@ -39,9 +39,9 @@ port = 8100
 
 [pool]
 max-ops = 2
+max-batches = 2
 flush-interval = 0
 
 [state]
 vizing-chain-id = 28516
-max-batches = 10
 `

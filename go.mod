@@ -6,14 +6,18 @@ require (
 	github.com/crate-crypto/go-kzg-4844 v1.1.0
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/gateway-fm/vectorized-poseidon-gold v1.0.0
+	github.com/gobuffalo/packr/v2 v2.8.3
 	github.com/gofrs/flock v0.8.1
 	github.com/hermeznetwork/tracerr v0.3.2
 	github.com/holiman/uint256 v1.3.2
 	github.com/iden3/go-iden3-crypto v0.0.17
+	github.com/jackc/pgconn v1.14.3
+	github.com/jackc/pgx/v4 v4.18.3
 	github.com/ledgerwatch/log/v3 v3.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/prometheus/client_golang v1.12.0
 	github.com/prometheus/client_model v0.2.1-0.20210607210712-147c58e9608a
+	github.com/rubenv/sql-migrate v1.7.1
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.25.7
@@ -52,21 +56,18 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/gobuffalo/logger v1.0.6 // indirect
 	github.com/gobuffalo/packd v1.0.1 // indirect
-	github.com/gobuffalo/packr/v2 v2.8.3 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/uuid v1.4.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.14.3 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/pgtype v1.14.0 // indirect
-	github.com/jackc/pgx/v4 v4.18.3 // indirect
-	github.com/jackc/pgx/v5 v5.7.1 // indirect
+	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/karrick/godirwalk v1.16.1 // indirect
@@ -86,7 +87,6 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/rubenv/sql-migrate v1.7.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect

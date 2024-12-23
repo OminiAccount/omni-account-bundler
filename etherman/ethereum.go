@@ -138,7 +138,14 @@ func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint
 		log.Errorf("set chain salt err: %+v", err)
 		return nil, salt
 	}
-	_ = dbTx.Commit(ether.ctx)
+	err = dbTx.Commit(ether.ctx)
+	if err != nil {
+		log.Errorf("db commit err: %+v", err)
+	}
+	log.Infof("==============================")
+	salt2 := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), nil)
+	log.Infof("check add salt: %d", ccli.chainID, salt2)
+	log.Infof("==============================")
 	for _, cli := range ether.chainsClient {
 		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
 	}

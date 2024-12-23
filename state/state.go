@@ -2,17 +2,13 @@ package state
 
 import (
 	"context"
-	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/pool"
-	"github.com/OAB/utils/db"
+	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletree"
-	"github.com/OAB/utils/queue"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"math/big"
 	"time"
@@ -23,31 +19,21 @@ type State struct {
 	ctx    context.Context
 	cancel func()
 
-	pool     PoolInterface
 	ethereum EthereumInterface
-	storage  *Storage
 	tree     *merkletree.SMT
 	his      *HistoryManager
-	db *PostgresStorage
-
-	proofQueue  *queue.ConcurrentQueue[Batch]
-	provenQueue *queue.ConcurrentQueue[ProofResult]
+	db       *PostgresStorage
 }
 
-func NewState(ctx context.Context, cfg Config, pool PoolInterface,
-	ether EthereumInterface, ethDb ethdb.Database, pg *pgxpool.Pool) (*State, error) {
+func NewState(ctx context.Context, cfg Config, s *merkletree.SMT, ether EthereumInterface, pg *pgxpool.Pool) (*State, error) {
 	stateCtx, cancel := context.WithCancel(ctx)
 	state := &State{
-		cfg:         cfg,
-		ctx:         stateCtx,
-		cancel:      cancel,
-		pool:        pool,
-		ethereum:    ether,
-		tree:        merkletree.NewSMT(db.NewMemDb(ethDb), false),
-		proofQueue:  queue.NewConcurrentQueue[Batch](),
-		provenQueue: queue.NewConcurrentQueue[ProofResult](),
-		storage:     NewStorage(ethDb),
-		db: NewPostgresStorage(pg),
+		cfg:      cfg,
+		ctx:      stateCtx,
+		cancel:   cancel,
+		ethereum: ether,
+		tree:     s,
+		db:       NewPostgresStorage(pg),
 	}
 	state.his = NewHistoryManager(ctx, cfg, state)
 
@@ -58,8 +44,6 @@ func NewState(ctx context.Context, cfg Config, pool PoolInterface,
 
 func (s *State) Start() {
 	log.Info("state start")
-	go s.ProcessBatch()
-	go s.ExecuteBatch()
 	go s.his.Start()
 	go func() {
 		for {
@@ -79,18 +63,19 @@ func (s *State) Start() {
 		}
 		for {
 			// deposit
-			time.Sleep(time.Minute)
+			time.Sleep(time.Minute * 5)
 			log.Infof("add test deposit...")
 			accInfo, _ := s.GetAccountInfo(testUser, *testAcc)
-			suo := &pool.SignedUserOperation{
-				UserOperation: &pool.UserOperation{
+			suo := &SignedUserOperation{
+				UserOperation: &UserOperation{
+					Uid:            accInfo.Uid,
 					Owner:          testUser,
-					OperationType:  pool.DepositAction,
+					OperationType:  DepositAction,
 					OperationValue: (*hexutil.Big)(big.NewInt(20000000000000000)),
 					Sender:         *testAcc,
-					Exec: pool.ExecData{
+					Exec: ExecData{
 						ChainId:                28516,
-						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce+1),
+						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce + 1),
 						CallData:               hexutil.Bytes(""),
 						MainChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
 						MainChainGasLimit:      hexutil.Uint64(10),
@@ -98,39 +83,67 @@ func (s *State) Start() {
 						DestChainGasLimit:      hexutil.Uint64(10),
 						ZkVerificationGasLimit: hexutil.Uint64(10),
 					},
-					InnerExec: pool.ExecData{},
+					InnerExec: ExecData{},
+					Status:    PendingStatus,
 				},
 			}
 			privateKey, err := crypto.HexToECDSA(testPrk)
 			if err != nil {
 				log.Errorf("Error generating private key: %v", err)
-				continue
+				return
 			}
 			signature, err := crypto.Sign(accounts.TextHash(suo.CalculateEIP712TypeDataHash()), privateKey)
 			if err != nil {
 				log.Errorf("Failed to sign hash typed data: %v", err)
+				return
 			}
 			signature[crypto.RecoveryIDOffset] += 27
 			suo.Signature = signature
-			if err := s.AddAccountGas(suo); err != nil {
-				log.Errorf("deposit signedUserOperation, add account gas error: %+v", err)
+			suo.Did = getDepositID(suo)
+			dbTx, err := s.db.BeginDBTransaction(s.ctx)
+			if err != nil {
+				log.Errorf("%+v, use db transaction err: %+v", suo.UserOperation, err)
 				return
 			}
-			s.pool.AddSignedUserOperation(suo)
+			tNonce, tGas, err := s.db.GetUserInfoLock(s.ctx, suo.Uid, suo.Exec.ChainId.Uint64(), dbTx)
+			if err != nil {
+				log.Errorf("%+v, chain: %d, get userinfo err: %+v", suo.UserOperation, suo.Exec.ChainId, err)
+				_ = dbTx.Rollback(s.ctx)
+				return
+			}
+			tGas = tGas.Add(tGas, suo.OperationValue.ToInt())
+			err = s.db.ModUserInfo(s.ctx, suo.Uid, suo.Exec.ChainId.Uint64(), tNonce+1, tGas.String(), dbTx)
+			if err != nil {
+				_ = dbTx.Rollback(s.ctx)
+				log.Errorf("%+v, chain: %d, mod userinfo err: %+v", suo.UserOperation, suo.Exec.ChainId, err)
+				return
+			}
+			err = s.db.AddOperation(s.ctx, suo.Uid, suo, dbTx)
+			if err != nil {
+				_ = dbTx.Rollback(s.ctx)
+				log.Errorf("%+v, add op err: %+v", suo.UserOperation, err)
+				return
+			}
+			err = dbTx.Commit(s.ctx)
+			if err != nil {
+				log.Errorf("%+v, add op commit err: %+v", suo.UserOperation, err)
+				return
+			}
 
 			// withdraw
-			time.Sleep(time.Minute * 10)
+			time.Sleep(time.Minute * 5)
 			log.Infof("add test withdraw...")
 			accInfo, _ = s.GetAccountInfo(testUser, *testAcc)
-			suo2 := &pool.SignedUserOperation{
-				UserOperation: &pool.UserOperation{
+			suo2 := &SignedUserOperation{
+				UserOperation: &UserOperation{
+					Uid:            accInfo.Uid,
 					Owner:          testUser,
-					OperationType:  pool.WithdrawAction,
+					OperationType:  WithdrawAction,
 					OperationValue: (*hexutil.Big)(big.NewInt(2000000000000000)),
 					Sender:         *testAcc,
-					Exec: pool.ExecData{
+					Exec: ExecData{
 						ChainId:                28516,
-						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce+1),
+						Nonce:                  hexutil.Uint64(accInfo.Chain[28516].Nonce + 1),
 						CallData:               hexutil.Bytes(""),
 						MainChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
 						MainChainGasLimit:      hexutil.Uint64(10),
@@ -138,25 +151,54 @@ func (s *State) Start() {
 						DestChainGasLimit:      hexutil.Uint64(10),
 						ZkVerificationGasLimit: hexutil.Uint64(10),
 					},
-					InnerExec: pool.ExecData{},
+					InnerExec: ExecData{},
+					Status:    PendingStatus,
 				},
 			}
 			privateKey, err = crypto.HexToECDSA(testPrk)
 			if err != nil {
 				log.Errorf("Error generating private key: %v", err)
-				continue
+				return
 			}
 			signature, err = crypto.Sign(accounts.TextHash(suo2.CalculateEIP712TypeDataHash()), privateKey)
 			if err != nil {
 				log.Errorf("Failed to sign hash typed data: %v", err)
+				return
 			}
 			signature[crypto.RecoveryIDOffset] += 27
 			suo2.Signature = signature
-			if err := s.AddAccountGas(suo2); err != nil {
-				log.Errorf("withdraw signedUserOperation, add account gas error: %+v", err)
+			hashBytes := crypto.Keccak256Hash(suo2.Encode())
+			suo2.Did = hashBytes.Hex()
+			dbTx, err = s.db.BeginDBTransaction(s.ctx)
+			if err != nil {
+				log.Errorf("%+v, use db transaction err: %+v", suo2.UserOperation, err)
 				return
 			}
-			s.pool.AddSignedUserOperation(suo2)
+			tNonce, tGas, err = s.db.GetUserInfoLock(s.ctx, suo2.Uid, suo2.Exec.ChainId.Uint64(), dbTx)
+			if err != nil {
+				log.Errorf("%+v, chain: %d, get userinfo err: %+v", suo2.UserOperation, suo2.Exec.ChainId, err)
+				_ = dbTx.Rollback(s.ctx)
+				return
+			}
+			tGas = tGas.Sub(tGas, suo2.OperationValue.ToInt())
+			tGas = tGas.Sub(tGas, suo2.UserOperation.CalculateGasUsed())
+			err = s.db.ModUserInfo(s.ctx, suo2.Uid, suo2.Exec.ChainId.Uint64(), tNonce+1, tGas.String(), dbTx)
+			if err != nil {
+				_ = dbTx.Rollback(s.ctx)
+				log.Errorf("%+v, chain: %d, mod userinfo err: %+v", suo2.UserOperation, suo2.Exec.ChainId, err)
+				return
+			}
+			err = s.db.AddOperation(s.ctx, suo2.Uid, suo2, dbTx)
+			if err != nil {
+				_ = dbTx.Rollback(s.ctx)
+				log.Errorf("%+v, add op err: %+v", suo2.UserOperation, err)
+				return
+			}
+			err = dbTx.Commit(s.ctx)
+			if err != nil {
+				log.Errorf("%+v, add op commit err: %+v", suo2.UserOperation, err)
+				return
+			}
 		}
 	}()
 }
@@ -168,83 +210,33 @@ func (s *State) Stop() {
 	s.Persistence()
 }
 
-func (s *State) ProcessBatch() {
-	log.Info("ProcessBatch start")
-	for {
-		select {
-		case batchContext := <-s.pool.BatchContext():
-			log.Debugf("Processing batch, SignedUserOperations count: %d", len(batchContext.SignedUserOperations()))
-			err := s.processBatch(batchContext)
-			if err != nil {
-				log.Error("failed process a batch", "error", err)
-			}
-		case <-s.ctx.Done():
-			if len(s.pool.BatchContext()) > 0 {
-				continue
-			}
-			log.Warn("Stopping PreProcessBatch due to context cancellation")
-			return
-		}
+func (s *State) IsSupportChain(nid hexutil.Uint64) bool {
+	cli := s.ethereum.GetChainCli(chains.ChainId(nid))
+	if cli == nil {
+		return false
 	}
-}
-
-func (s *State) ExecuteBatch() {
-	log.Info("ExecuteBatch start")
-	ticker := time.NewTicker(time.Minute)
-	for {
-		select {
-		case <-ticker.C:
-			res, err := s.executeBatch()
-			if err != nil {
-				log.Errorf("send batch to verify error: %s", err.Error())
-			}
-			if res != nil {
-				s.provenQueue.Lpush(*res)
-			}
-		case <-s.ctx.Done():
-			if !s.provenQueue.IsEmpty() {
-				continue
-			}
-			log.Warn("Stopping ExecuteBatch due to context cancellation")
-			return
-		}
-	}
+	return true
 }
 
 func (s *State) GetHisIns() *HistoryManager {
 	return s.his
 }
 
+func (s *State) GetTree() *merkletree.SMT {
+	return s.tree
+}
+
 func (s *State) Persistence() {
 	//log.Info("cache state data into disk")
-	if err := s.storage.cache(); err != nil {
-		log.Error("cache state data into disk error", "error", err)
-	}
 	if err := s.tree.Db.Cache(); err != nil {
 		log.Error("cache smt into disk error", "error", err)
-	}
-	if err := s.pool.Cache(); err != nil {
-		log.Error("cache pool into disk error", "error", err)
 	}
 }
 
 func (s *State) LoadCache() {
 	log.Info("load state data from disk")
-	if err := s.storage.loadCache(); err != nil {
-		log.Fatalf("load state data from disk error: %v", err)
-	}
 	err := s.tree.Db.LoadCache()
 	if err != nil {
 		log.Fatalf("load smt data from disk error: %v", err)
-	}
-	for i := s.storage.VerifyBatchNumber + 1; i <= s.storage.BatchNumber; i++ {
-		batch, err := s.storage.loadBatch(i)
-		if err != nil && err != NotBatch {
-			log.Fatalf("load batch info from disk error: %v", err)
-		}
-		if batch != nil {
-			log.Infof("from cache load batch number(%d)", batch.NewNumBatch)
-			s.proofQueue.Enqueue(*batch)
-		}
 	}
 }

@@ -5,16 +5,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/pool"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
+	"strings"
 	"testing"
 )
 
 func TestBlock(t *testing.T) {
+	encodeStr := "0x0101000000000000000000000000000000000000000000000000470de4df820000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000006f64c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a4700000000000000000000000000000000a0000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000001400000000000000000000000000000014307866623130313134663630663636666463386630373764313631653765646163323430313134396262323438663362626330326437343439393730326535643535343564613831333333383937306139333732396363306235313733356462313463613066393631336434393466303464306666643462383433313866366136663162"
+	l2data := common.Hex2Bytes(strings.TrimPrefix(encodeStr, "0x"))
+	encode := hexutil.Encode(l2data)
+	t.Log(encode)
+	if encode == encodeStr {
+		t.Log(true)
+	} else {
+		t.Log(false)
+	}
+	return
+
 	cli, err := ethclient.Dial("https://sepolia-rollup.arbitrum.io/rpc")
 	if err != nil {
 		t.Fatal(err)
@@ -35,35 +46,6 @@ func TestBlock(t *testing.T) {
 	t.Log(header.Time)
 	t.Log(header.ParentHash)
 	t.Log(header.Hash())
-}
-
-func TestEncodeCircuitInput(t *testing.T) {
-	userOpDeposit := pool.UserOperation{
-		OperationType:  1,
-		OperationValue: (*hexutil.Big)(big.NewInt(100)),
-		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Exec: pool.ExecData{
-			Nonce:                  1,
-			ChainId:                hexutil.Uint64(28516),
-			CallData:               common.FromHex("0x"),
-			MainChainGasLimit:      0x30d40,
-			DestChainGasLimit:      0,
-			ZkVerificationGasLimit: 0x898,
-			MainChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
-			DestChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
-		},
-	}
-	t.Logf("%+v", userOpDeposit)
-	dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
-	signedUserOperation := pool.SignedUserOperation{
-		UserOperation: &userOpDeposit,
-		Signature:     signMessage(dataHash),
-	}
-	t.Logf("%+v", signedUserOperation.Signature)
-	var sus []*pool.SignedUserOperation
-	sus = append(sus, &signedUserOperation)
-	by := encodeCircuitInput(sus)
-	t.Log(by)
 }
 
 func hexTo(hex string) *hexutil.Big {

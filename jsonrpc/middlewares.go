@@ -1,6 +1,9 @@
 package jsonrpc
 
 import (
+	"bytes"
+	"github.com/OAB/utils/log"
+	"io"
 	"net/http"
 )
 
@@ -35,6 +38,19 @@ func enableCORS(h http.Handler) http.Handler {
 		// Set content type for POST requests
 		w.Header().Set("Content-type", "application/json")
 
+		body := io.LimitReader(r.Body, 1024*1024*5)
+		data, err := io.ReadAll(body)
+		if err != nil {
+			http.Error(w, "read data error", http.StatusBadRequest)
+			return
+		}
+		/*var req types.Request
+		if err := json.Unmarshal(data, &req); err != nil {
+			http.Error(w, "invalid json object request body", http.StatusBadRequest)
+			return
+		}*/
+		log.Infof("%s %s", r.Method, string(data))
+		r.Body = io.NopCloser(bytes.NewBuffer(data))
 		// Serve the request
 		h.ServeHTTP(w, r)
 

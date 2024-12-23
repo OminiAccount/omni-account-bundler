@@ -12,6 +12,7 @@ CREATE TABLE omni.user
     salt        INTEGER,
     failed_salt VARCHAR,
     create_at   TIMESTAMP WITH TIME ZONE NOT NULL,
+    update_at   TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT user_unique UNIQUE (owner)
 );
 
@@ -28,19 +29,32 @@ CREATE TABLE omni.user_info
 
 CREATE TABLE omni.batch
 (
-    batch_num  BIGINT PRIMARY KEY,,
-    network_id INTEGER,
-    nonce      BIGINT,
-    gas        VARCHAR,
-    create_at  TIMESTAMP WITH TIME ZONE NOT NULL,
-    update_at  TIMESTAMP WITH TIME ZONE NOT NULL
+    batch_num       BIGINT PRIMARY KEY,
+    batch_hash      VARCHAR,
+    old_state_root  VARCHAR,
+    state_root      VARCHAR,
+    acc_input_hash  VARCHAR,
+    encoded         VARCHAR,
+    status          INTEGER,
+    create_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    update_at       TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE omni.proof
+(
+    batch_num       BIGINT NOT NULL REFERENCES omni.batch (batch_num) ON DELETE CASCADE,
+    final_batch_num BIGINT NOT NULL REFERENCES omni.batch (batch_num) ON DELETE CASCADE,
+    proof           VARCHAR,
+    public_values   VARCHAR,
+    create_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    update_at       TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 CREATE TABLE omni.operation
 (
     id                         SERIAL8 PRIMARY KEY,
     user_id                    BIGINT REFERENCES omni.user (id) ON DELETE CASCADE,
-    batch_num                  BIGINT REFERENCES omni.batch (batch_num) ON DELETE CASCADE,
+    batch_num                  BIGINT,
     status                     INTEGER,
     signature                  VARCHAR,
     did                        VARCHAR,
@@ -76,4 +90,21 @@ CREATE TABLE omni.chain_height
     create_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     update_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT net_unique UNIQUE (network_id)
+);
+
+CREATE TABLE omni.history (
+    id            SERIAL8 PRIMARY KEY,
+    did           VARCHAR,
+    user_id       BIGINT REFERENCES omni.user (id) ON DELETE CASCADE,
+    order_type    SMALLINT NOT NULL,
+    from_info     jsonb,
+    to_info       jsonb,
+    source_chain  BIGINT NOT NULL,
+    target_chain  BIGINT NOT NULL,
+    source_hash   VARCHAR,
+    target_hash   VARCHAR,
+    swap_hash     VARCHAR,
+    status        INTEGER,
+    create_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    update_at     TIMESTAMP WITH TIME ZONE NOT NULL
 );
