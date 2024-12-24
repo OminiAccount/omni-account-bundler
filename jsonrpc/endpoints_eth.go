@@ -5,8 +5,10 @@ import (
 	"github.com/OAB/jsonrpc/types"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
+	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
+	"time"
 )
 
 type EthEndpoints struct {
@@ -81,14 +83,15 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 	if err != nil {
 		return nil, err
 	}
-	uos, err := e.state.GetAccountOps(accInfo.Uid)
-	if err != nil {
-		return nil, err
-	}
+	//uos, err := e.state.GetAccountOps(accInfo.Uid)
+	//if err != nil {
+	//	return nil, err
+	//}
+	log.Info(accInfo.Chain[chainId].Gas.Uint64())
 	return types.AccountInfo{
-		Balance:        accInfo.Chain[chainId].Gas.String(),
-		Nonce:          accInfo.Chain[chainId].Nonce + 1,
-		UserOperations: uos,
+		Balance: hex.EncodeBig(accInfo.Chain[chainId].Gas),
+		Nonce:   accInfo.Chain[chainId].Nonce + 1,
+		//UserOperations: uos,
 	}, nil
 }
 
@@ -98,6 +101,12 @@ func (e *EthEndpoints) ReportHis(user, account common.Address, data state.Accoun
 		return err
 	}
 	data.Uid = accInfo.Uid
+	if data.HisTime < 1 {
+		data.HisTime = time.Now().Unix()
+	} else if data.HisTime > 10000000000 {
+		data.HisTime /= 1000
+	}
+	data.TimeAt = time.Unix(data.HisTime, 0)
 	data.Did = data.UniqueID()
 	return e.his.SaveAccountHis(&data)
 }
@@ -106,6 +115,9 @@ func (e *EthEndpoints) GetUserHistory(user, account common.Address, timestamp ui
 	ai, err := e.state.GetAccountInfo(user, account)
 	if err != nil {
 		return nil, err
+	}
+	if timestamp < 1 {
+		timestamp = uint64(time.Now().Unix())
 	}
 	return e.his.GetAccountHis(ai.Uid, timestamp, 10)
 }

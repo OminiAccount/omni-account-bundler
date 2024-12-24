@@ -52,13 +52,24 @@ func (p *Pool) StartAutoFlush() {
 			select {
 			case <-ticker.C:
 				p.CheckFlush(false)
-				err := p.executeBatch()
-				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-					log.Errorf("send batch to verify error: %s", err.Error())
-				}
 			case <-p.ctx.Done():
 				ticker.Stop()
 				return
+			}
+		}
+	}()
+	go func() {
+		for {
+			if p.ctx.Err() != nil {
+				return
+			}
+			err := p.executeBatch()
+			if err != nil {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					log.Errorf("send batch to verify error: %s", err.Error())
+				}
+				time.Sleep(time.Minute)
+				continue
 			}
 		}
 	}()

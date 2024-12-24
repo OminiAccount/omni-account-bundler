@@ -68,7 +68,7 @@ func (p *PostgresStorage) DelProof(ctx context.Context, num, finalNum uint64, db
 	return err
 }
 
-func (p *PostgresStorage) GetEarliestProof(ctx context.Context, dbTx pgx.Tx) (ProofResult, error) {
+func (p *PostgresStorage) GetEarliestProof(ctx context.Context, dbTx pgx.Tx) (*ProofResult, error) {
 	getSQL := `
 		SELECT batch_num, final_batch_num, proof, public_values
 		FROM omni.proof 
@@ -79,11 +79,11 @@ func (p *PostgresStorage) GetEarliestProof(ctx context.Context, dbTx pgx.Tx) (Pr
 	var proofStr, valuesStr string
 	err := e.QueryRow(ctx, getSQL).Scan(&pr.Number, &pr.FinalNumber, &proofStr, &valuesStr)
 	if err != nil {
-		return pr, err
+		return nil, err
 	}
 	pr.Proof = common.Hex2Bytes(proofStr)
 	pr.PublicValues = common.Hex2Bytes(valuesStr)
-	return pr, nil
+	return &pr, nil
 }
 
 func (p *PostgresStorage) AddProof(ctx context.Context, r *ProofResult, dbTx pgx.Tx) error {
@@ -148,7 +148,7 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		b.batch_num, b.batch_hash, b.old_state_root, b.state_root, b.acc_input_hash, b.encoded, b.status, b.create_at, o.*
 		FROM omni.batch b
 		LEFT JOIN omni.operation o ON o.batch_num = b.batch_num 
-		WHERE b.status=$1 AND o.status=$2 AND b.batch_num>=$3 AND b.batch_num<=$4 ORDER BY b.batch_num ASC;
+		WHERE b.status=$1 AND o.status=$2 AND b.batch_num>=$3 AND b.batch_num<=$4 ORDER BY b.batch_num,o.id ASC;
 	`
 	e := p.getExecQuerier(dbTx)
 	var list []*Batch
@@ -212,9 +212,6 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 			listM[b.NewNumBatch] = lb
 		}
 	}
-	/*for _, b := range listM {
-		list = append(list, b)
-	}*/
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}

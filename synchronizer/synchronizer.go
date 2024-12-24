@@ -7,7 +7,6 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/log"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -17,12 +16,11 @@ type Synchronizer struct {
 	state     types.StateInterface
 	ctx       context.Context
 	cancelCtx context.CancelFunc
-	storage   ethdb.Database
 	db        *PostgresStorage
 }
 
 func NewSynchronizer(ctx context.Context, ethereum types.EthereumInterface, p types.PoolInterface,
-	state types.StateInterface, db ethdb.Database, pg *pgxpool.Pool) (*Synchronizer, error) {
+	state types.StateInterface, pg *pgxpool.Pool) (*Synchronizer, error) {
 	syncCtx, cancel := context.WithCancel(ctx)
 	return &Synchronizer{
 		ether:     ethereum,
@@ -30,7 +28,6 @@ func NewSynchronizer(ctx context.Context, ethereum types.EthereumInterface, p ty
 		state:     state,
 		ctx:       syncCtx,
 		cancelCtx: cancel,
-		storage:   db,
 		db:        NewPostgresStorage(pg),
 	}, nil
 }

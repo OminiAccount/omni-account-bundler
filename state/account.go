@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OAB/utils/chains"
+	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/packutils"
 	"github.com/ethereum/go-ethereum/common"
@@ -60,6 +61,7 @@ type AccountHistory struct {
 	TargetHash  string        `json:"targetHash"`
 	SwapHash    string        `json:"swapHash"`
 	Status      uint64        `json:"status"`
+	HisTime     int64         `json:"time"`
 	TimeAt      time.Time     `json:"timeAt"`
 }
 
@@ -78,6 +80,7 @@ func (a AccountHistory) Encode() []byte {
 	b = append(b, common.LeftPadBytes(common.Hex2Bytes(a.From.Value), 32)...)
 	b = append(b, common.LeftPadBytes(common.HexToAddress(a.To.Address).Bytes(), 32)...)
 	b = append(b, common.LeftPadBytes(common.Hex2Bytes(a.To.Value), 32)...)
+	b = append(b, packutils.Uint64ToBytes(uint64(a.HisTime))...)
 	return b
 }
 
@@ -88,16 +91,17 @@ func ToUserOperationHis(tx string, op *UserOperation) AccountHistory {
 		OrderType: op.OperationType,
 		From: HistoryDetail{
 			Address: op.Sender.Hex(),
-			Value:   op.OperationValue.String(),
+			Value:   hex.EncodeBig(op.OperationValue.ToInt()),
 		},
 		SourceChain: op.Exec.ChainId.Uint64(),
 		SourceHash:  tx,
 		To: HistoryDetail{
 			Address: op.Sender.Hex(),
-			Value:   op.OperationValue.String(),
+			Value:   hex.EncodeBig(op.OperationValue.ToInt()),
 		},
 		TargetChain: op.Exec.ChainId.Uint64(),
 		TargetHash:  tx,
+		HisTime:     time.Now().Unix(),
 		TimeAt:      time.Now(),
 	}
 	if op.Status == SuccessStatus {
@@ -174,7 +178,7 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *SignedUserOperation) erro
 		err = fmt.Errorf("account:%s nonce mismatch, want:%d, get:%d", ai.User, tNonce, suop.Exec.Nonce.Uint64())
 		return err
 	}
-	err = s.db.ModUserInfo(s.ctx, ai.Uid, suop.Exec.ChainId.Uint64(), tNonce, tGas.String(), dbTx)
+	err = s.db.ModUserInfo(s.ctx, ai.Uid, suop.Exec.ChainId.Uint64(), tNonce, hex.EncodeBig(tGas), dbTx)
 	if err != nil {
 		_ = dbTx.Rollback(s.ctx)
 		log.Errorf("%+v, chain: %d, mod userinfo err: %+v", suop.UserOperation, suop.Exec.ChainId, err)
@@ -232,7 +236,7 @@ func (s *State) AddAccountGas(suop *SignedUserOperation, dbTx pgx.Tx) error {
 		return err1
 	}
 	tGas = tGas.Add(tGas, suop.OperationValue.ToInt())
-	err = s.db.ModUserInfo(s.ctx, suop.Uid, suop.Exec.ChainId.Uint64(), 0, tGas.String(), dbTx)
+	err = s.db.ModUserInfo(s.ctx, suop.Uid, suop.Exec.ChainId.Uint64(), 0, hex.EncodeBig(tGas), dbTx)
 	if err != nil {
 		if flag {
 			_ = dbTx.Rollback(s.ctx)

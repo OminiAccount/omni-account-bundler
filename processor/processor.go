@@ -3,18 +3,15 @@ package processor
 import (
 	"context"
 	"github.com/OAB/config"
-	"github.com/OAB/database/leveldb"
 	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
+	"github.com/OAB/state/hashdb"
 	"github.com/OAB/synchronizer"
-	"github.com/OAB/utils"
-	"github.com/OAB/utils/db"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletree"
-	"path/filepath"
 )
 
 type Processor struct {
@@ -41,17 +38,17 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	log.Info("DB successfully initialized")
 
 	// Connect to levelDB
-	levelDBDir, err := filepath.Abs("./db")
+	/*levelDBDir, err := filepath.Abs("./db")
 	if _, err = utils.PathExists(levelDBDir); err != nil {
 		return nil, err
 	}
 	levelDB, err := leveldb.NewLevelDB(levelDBDir)
 	if err != nil {
 		return nil, err
-	}
+	}*/
 
 	// tree
-	tree := merkletree.NewSMT(db.NewMemDb(levelDB), false)
+	tree := merkletree.NewSMT(hashdb.NewHashDb(ctx, storage), false)
 
 	// Ethereum
 	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, storage)
@@ -70,7 +67,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	log.Info("Pool successfully initialized")
 
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, poolIns, st, levelDB, storage)
+	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, poolIns, st, storage)
 	if err != nil {
 		return nil, err
 	}

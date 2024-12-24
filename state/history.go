@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ether_types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v4"
+	"strings"
 	"time"
 )
 
@@ -39,7 +40,7 @@ func NewHistoryManager(ctx context.Context, cfg Config, s *State) *HistoryManage
 
 func (h *HistoryManager) Start() {
 	log.Infof("history manager start")
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(h.state.cfg.HisInterval.Duration)
 	for {
 		select {
 		case <-h.ctx.Done():
@@ -102,7 +103,7 @@ func (h *HistoryManager) checkHisFromTx(his AccountHistory) {
 		log.Infof("[HistoryManager] from signer get sender err: %v", err)
 		return
 	}
-	if his.From.Address != from.Hex() {
+	if his.From.Address != strings.ToLower(from.Hex()) {
 		log.Warnf("[HistoryManager] tx from address(%s / %s) mismatch", his.From.Address, from.Hex())
 		//return true, fmt.Errorf("tx from address mismatch")
 	}
@@ -155,7 +156,7 @@ func (h *HistoryManager) checkHisToTx(his AccountHistory) {
 		log.Infof("[HistoryManager] from signer get sender err: %v", err)
 		return
 	}
-	if his.From.Address != from.Hex() {
+	if his.From.Address != strings.ToLower(from.Hex()) {
 		log.Warnf("[HistoryManager] tx from address(%s / %s) mismatch", his.From.Address, from.Hex())
 		//return true, fmt.Errorf("tx from address mismatch")
 	}

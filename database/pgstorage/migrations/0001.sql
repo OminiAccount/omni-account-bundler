@@ -108,3 +108,36 @@ CREATE TABLE omni.history (
     create_at     TIMESTAMP WITH TIME ZONE NOT NULL,
     update_at     TIMESTAMP WITH TIME ZONE NOT NULL
 );
+
+CREATE TABLE omni.hash_db (
+    hash   VARCHAR PRIMARY KEY,
+    data   jsonb
+);
+
+CREATE TABLE omni.hash_accval (
+    hash   VARCHAR PRIMARY KEY,
+    data   jsonb
+);
+
+CREATE TABLE omni.hash_keysource (
+    hash   VARCHAR PRIMARY KEY,
+    data   BYTEA
+);
+
+CREATE TABLE omni.hash_hashkey (
+    hash   VARCHAR PRIMARY KEY,
+    data   BYTEA
+);
+
+CREATE TABLE omni.hash_code (
+    hash   VARCHAR PRIMARY KEY,
+    data   BYTEA
+);
+
+CREATE TABLE omni.hash_info (
+    lastroot VARCHAR,
+    depth    BIGINT
+);
+
+-- Insert default values into hash_info table
+INSERT INTO omni.hash_info (lastroot, depth) VALUES ('0x0', 0);

@@ -43,5 +43,5 @@ max-batches = 2
 flush-interval = 0
 
 [state]
-vizing-chain-id = 28516
+his-interval = "1m"
 `

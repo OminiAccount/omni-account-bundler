@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/utils/chains"
+	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletree"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -15,10 +16,9 @@ import (
 )
 
 type State struct {
-	cfg    Config
-	ctx    context.Context
-	cancel func()
-
+	cfg      Config
+	ctx      context.Context
+	cancel   func()
 	ethereum EthereumInterface
 	tree     *merkletree.SMT
 	his      *HistoryManager
@@ -36,21 +36,12 @@ func NewState(ctx context.Context, cfg Config, s *merkletree.SMT, ether Ethereum
 		db:       NewPostgresStorage(pg),
 	}
 	state.his = NewHistoryManager(ctx, cfg, state)
-
-	state.LoadCache()
-
 	return state, nil
 }
 
 func (s *State) Start() {
 	log.Info("state start")
 	go s.his.Start()
-	go func() {
-		for {
-			time.Sleep(time.Second * 5)
-			s.Persistence()
-		}
-	}()
 	go func() {
 		testPrk := "82693fc767eb00e3288a01b7516f3a98269882e951be74403e4061d898ea0929"
 		testUser := common.HexToAddress("0x7c38C1646213255f62dB509688B8fA062e0Ed8e4")
@@ -112,7 +103,7 @@ func (s *State) Start() {
 				return
 			}
 			tGas = tGas.Add(tGas, suo.OperationValue.ToInt())
-			err = s.db.ModUserInfo(s.ctx, suo.Uid, suo.Exec.ChainId.Uint64(), tNonce+1, tGas.String(), dbTx)
+			err = s.db.ModUserInfo(s.ctx, suo.Uid, suo.Exec.ChainId.Uint64(), tNonce+1, hex.EncodeBig(tGas), dbTx)
 			if err != nil {
 				_ = dbTx.Rollback(s.ctx)
 				log.Errorf("%+v, chain: %d, mod userinfo err: %+v", suo.UserOperation, suo.Exec.ChainId, err)
@@ -182,7 +173,7 @@ func (s *State) Start() {
 			}
 			tGas = tGas.Sub(tGas, suo2.OperationValue.ToInt())
 			tGas = tGas.Sub(tGas, suo2.UserOperation.CalculateGasUsed())
-			err = s.db.ModUserInfo(s.ctx, suo2.Uid, suo2.Exec.ChainId.Uint64(), tNonce+1, tGas.String(), dbTx)
+			err = s.db.ModUserInfo(s.ctx, suo2.Uid, suo2.Exec.ChainId.Uint64(), tNonce+1, hex.EncodeBig(tGas), dbTx)
 			if err != nil {
 				_ = dbTx.Rollback(s.ctx)
 				log.Errorf("%+v, chain: %d, mod userinfo err: %+v", suo2.UserOperation, suo2.Exec.ChainId, err)
@@ -206,8 +197,6 @@ func (s *State) Start() {
 func (s *State) Stop() {
 	log.Info("state stop")
 	s.cancel()
-	time.Sleep(time.Second * 2)
-	s.Persistence()
 }
 
 func (s *State) IsSupportChain(nid hexutil.Uint64) bool {
@@ -224,19 +213,4 @@ func (s *State) GetHisIns() *HistoryManager {
 
 func (s *State) GetTree() *merkletree.SMT {
 	return s.tree
-}
-
-func (s *State) Persistence() {
-	//log.Info("cache state data into disk")
-	if err := s.tree.Db.Cache(); err != nil {
-		log.Error("cache smt into disk error", "error", err)
-	}
-}
-
-func (s *State) LoadCache() {
-	log.Info("load state data from disk")
-	err := s.tree.Db.LoadCache()
-	if err != nil {
-		log.Fatalf("load smt data from disk error: %v", err)
-	}
 }

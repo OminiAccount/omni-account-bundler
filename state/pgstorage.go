@@ -120,7 +120,7 @@ func (p *PostgresStorage) AddUserInfo(ctx context.Context, uid, nid uint64, dbTx
 }
 
 func (p *PostgresStorage) GetUserInfoByAA(ctx context.Context, owner, account string, dbTx pgx.Tx) (*AccountInfo, error) {
-	const getSQL = `
+	getSQL := `
 		SELECT
 			u.id, u.salt, ui.network_id, ui.nonce, ui.gas
 		FROM
@@ -159,13 +159,13 @@ func (p *PostgresStorage) GetUserInfoByAA(ctx context.Context, owner, account st
 			ci := ChainInfo{
 				NetworkID: uint64(nid.Int32),
 			}
-			ai.Chain[uint64(nid.Int32)] = ci
 			if nonce.Valid {
 				ci.Nonce = uint64(nonce.Int64)
 			}
 			if gas.Valid {
 				ci.Gas = hex.DecodeBig(gas.String)
 			}
+			ai.Chain[uint64(nid.Int32)] = ci
 		}
 	}
 	ai.Uid = tid
@@ -173,6 +173,7 @@ func (p *PostgresStorage) GetUserInfoByAA(ctx context.Context, owner, account st
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	//log.Infof("%+v", ai)
 	return ai, nil
 }
 
@@ -217,13 +218,14 @@ func scanOperation(row pgx.Row) (*UserOperation, error) {
 	op := &UserOperation{}
 	var opValue, signature string
 	var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
+	var updateAt time.Time
 	err := row.Scan(
 		&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &signature, &op.Did, &op.OperationType, &opValue,
 		&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 		&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 		&execDestGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
 		&op.InnerExec.MainChainGasLimit, &iexecMainGasPrice, &op.InnerExec.ZkVerificationGasLimit,
-		&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice,
+		&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice, &op.TimeAt, &updateAt,
 	)
 	if err != nil {
 		return nil, err
@@ -411,7 +413,7 @@ func (p *PostgresStorage) AddUserHis(ctx context.Context, d *AccountHistory, dbT
 		return err
 	}
 	_, err = e.Exec(ctx, addSQL, d.Did, d.Uid, d.OrderType, string(fromB), string(toB), d.SourceChain,
-		d.TargetChain, d.SourceHash, d.TargetHash, d.SwapHash, d.Status, time.Now(), time.Now())
+		d.TargetChain, d.SourceHash, d.TargetHash, d.SwapHash, d.Status, d.TimeAt, d.TimeAt)
 	return err
 }
 
@@ -498,7 +500,7 @@ func (p *PostgresStorage) UpdateHistory(ctx context.Context, id uint64, m map[st
 		updateSQL += col + "=$" + strconv.Itoa(len(where)+1) + ","
 		where = append(where, val)
 	}
-	updateSQL += "update_at=$" + strconv.Itoa(len(where)+1) + " where id=$" + strconv.Itoa(len(where)+1) + ";"
+	updateSQL += "update_at=$" + strconv.Itoa(len(where)+1) + " where id=$" + strconv.Itoa(len(where)+2) + ";"
 	where = append(where, time.Now(), id)
 	_, err := e.Exec(ctx, updateSQL, where...)
 	return err

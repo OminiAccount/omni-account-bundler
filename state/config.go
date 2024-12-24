@@ -1,5 +1,7 @@
 package state
 
+import "github.com/OAB/utils/apitypes"
+
 type Config struct {
-	VizingChainID uint64 `mapstructure:"vizing-chain-id"`
+	HisInterval apitypes.Duration `mapstructure:"his-interval"`
 }
