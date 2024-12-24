@@ -1,23 +1,28 @@
 package types
 
 import (
+	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
-	"github.com/OAB/state/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type PoolInterface interface {
+	GetBatchProof() ([]*pool.Batch, error)
+	SetBatchProofResult(*pool.ProofResult) error
+}
+
 type StateInterface interface {
-	GetBatchProof() ([]state.Batch, error)
-	SetBatchProofResult(*state.ProofResult) error
-	GetAccountAdrs(common.Address) *common.Address
-	GetAccountInfoByAA(common.Address, common.Address) (*types.AccountInfo, error)
-	GetAccountInfo(common.Address) (*common.Address, *types.AccountInfo)
-	AddSignedUserOperation(*pool.SignedUserOperation) error
+	IsSupportChain(hexutil.Uint64) bool
+	GetAccountInfo(common.Address, common.Address) (*state.AccountInfo, error)
+	GetAccountOps(uid uint64) ([]*state.UserOperation, error)
+	GetAccountAdr(common.Address) *common.Address
+	AddSignedUserOp(*state.AccountInfo, *state.SignedUserOperation) error
 	CreateAccount(common.Address) *common.Address
+	AddFailedCreateAA(uint64, uint64)
 }
 
 type HisInterface interface {
-	GetAccountHis(user, account common.Address, page uint64) ([]types.AccountHistory, error)
-	SaveAccountHis(user, account common.Address, data *types.AccountHistory) error
+	GetAccountHis(uint64, uint64, uint64) ([]state.AccountHistory, error)
+	SaveAccountHis(*state.AccountHistory) error
 }

@@ -1,4 +1,4 @@
-package pool
+package state
 
 import (
 	"encoding/json"

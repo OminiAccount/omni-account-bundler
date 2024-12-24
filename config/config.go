@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
@@ -24,6 +25,7 @@ type Config struct {
 	Pool     pool.Config        `mapstructure:"pool"`
 	State    state.Config       `mapstructure:"state"`
 	Log      log.Config         `mapstructure:"log"`
+	Db       pgstorage.Config   `mapstructure:"database"`
 }
 
 // Default parses the default configuration values.

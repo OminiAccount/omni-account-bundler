@@ -1,9 +1,5 @@
 package types
 
-import (
-	"github.com/OAB/pool"
-)
-
 const (
 	SignUserOPType = iota
 	SwapType
@@ -11,10 +7,9 @@ const (
 )
 
 type AccountInfo struct {
-	Balance        string
-	Nonce          uint64
-	LatestPage     uint64
-	UserOperations []*pool.UserOperation
+	Balance string
+	Nonce   uint64
+	//UserOperations []*state.UserOperation
 }
 
 type UserHistory struct {

@@ -3,15 +3,15 @@ package processor
 import (
 	"context"
 	"github.com/OAB/config"
-	"github.com/OAB/database/leveldb"
+	"github.com/OAB/database/pgstorage"
 	"github.com/OAB/etherman"
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
+	"github.com/OAB/state/hashdb"
 	"github.com/OAB/synchronizer"
-	"github.com/OAB/utils"
 	"github.com/OAB/utils/log"
-	"path/filepath"
+	"github.com/OAB/utils/merkletree"
 )
 
 type Processor struct {
@@ -31,41 +31,50 @@ var processor *Processor
 func NewProcessor(cfg *config.Config) (*Processor, error) {
 	ctx := context.Background()
 
+	storage, err := pgstorage.NewPostgresStorage(cfg.Db)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Info("DB successfully initialized")
+
 	// Connect to levelDB
-	levelDBDir, err := filepath.Abs("./db")
+	/*levelDBDir, err := filepath.Abs("./db")
 	if _, err = utils.PathExists(levelDBDir); err != nil {
 		return nil, err
 	}
 	levelDB, err := leveldb.NewLevelDB(levelDBDir)
 	if err != nil {
 		return nil, err
-	}
+	}*/
 
-	// pool
-	poolInstance := pool.NewMemoryPool(cfg.Pool, levelDB)
-	log.Info("Pool successfully initialized")
+	// tree
+	tree := merkletree.NewSMT(hashdb.NewHashDb(ctx, storage), false)
 
 	// Ethereum
-	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, levelDB)
+	ethereum, err := etherman.NewEthereum(ctx, cfg.Ethereum, storage)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Ethereum successfully initialized")
 
-	st, err := state.NewState(ctx, cfg.State, poolInstance, ethereum, levelDB)
+	st, err := state.NewState(ctx, cfg.State, tree, ethereum, storage)
 	if err != nil {
 		return nil, err
 	}
 
+	// pool
+	poolIns := pool.NewMemoryPool(cfg.Pool, ethereum, st, storage)
+	log.Info("Pool successfully initialized")
+
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(poolInstance, ethereum, st, levelDB)
+	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, poolIns, st, storage)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("Synchronizer successfully initialized")
 
 	// jsonrpc
-	server := createJSONRPCServer(cfg.JsonRpc, st)
+	server := createJSONRPCServer(cfg.JsonRpc, poolIns, st)
 	log.Info("JSONRPCServer successfully initialized")
 
 	processor = &Processor{
@@ -75,7 +84,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 		ethereum:     ethereum,
 		synchronizer: sync,
 		state:        st,
-		pool:         poolInstance,
+		pool:         poolIns,
 	}
 
 	return processor, nil

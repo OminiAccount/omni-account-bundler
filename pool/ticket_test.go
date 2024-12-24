@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/OAB/database/leveldb"
+	"github.com/OAB/lib/common/hexutil"
+	"github.com/OAB/state"
 	"github.com/OAB/utils"
 	"github.com/OAB/utils/db"
 	"github.com/OAB/utils/merkletree"
@@ -19,7 +21,7 @@ import (
 
 func TestOpUnmarshalJSON(t *testing.T) {
 	raw := `{"operationType":1,"operationValue":"0x0","sender":"0x569db0654a0c9844257a7f496e02f9e7bc805c0b","exec":{"nonce":"0x1","chainId":"0x6f64","callData":"0x","mainChainGasLimit":"0x0","destChainGasLimit":"0x3d090","zkVerificationGasLimit":"0x898","mainChainGasPrice":"0x5f5e100","destChainGasPrice":"0x3b9aca00"},"innerExec":{"nonce":"0x0","chainId":"0x0","callData":"0x","mainChainGasLimit":"0x0","destChainGasLimit":"0x0","zkVerificationGasLimit":"0x0","mainChainGasPrice":"0x0","destChainGasPrice":"0x0"},"signature":"0xd0c0f69178773015bae93e1e61f1c80e3065d25074230ab48e43e96cd5fb0331014397c3afa3963a4d1837853276b4be213b92d13ecda23677e3dd7bda3c427a1c"}`
-	var uo SignedUserOperation
+	var uo state.SignedUserOperation
 	err := json.Unmarshal([]byte(raw), &uo)
 	if err != nil {
 		t.Fatal(err)
@@ -47,6 +49,35 @@ func TestPackUint(t *testing.T) {
 	b = big.NewInt(0).SetBytes(padded[8:])
 	c := big.NewInt(0).SetBytes(padded[:8])
 	t.Log(a.Uint64(), b.Uint64(), c.Uint64())
+}
+
+func TestEncodeCircuitInput(t *testing.T) {
+	userOpDeposit := state.UserOperation{
+		OperationType:  1,
+		OperationValue: (*hexutil.Big)(big.NewInt(100)),
+		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
+		Exec: state.ExecData{
+			Nonce:                  1,
+			ChainId:                hexutil.Uint64(28516),
+			CallData:               common.FromHex("0x"),
+			MainChainGasLimit:      0x30d40,
+			DestChainGasLimit:      0,
+			ZkVerificationGasLimit: 0x898,
+			MainChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
+			DestChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
+		},
+	}
+	t.Logf("%+v", userOpDeposit)
+	dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
+	signedUserOperation := state.SignedUserOperation{
+		UserOperation: &userOpDeposit,
+		Signature:     signMessage(dataHash),
+	}
+	t.Logf("%+v", signedUserOperation.Signature)
+	var sus []*state.SignedUserOperation
+	sus = append(sus, &signedUserOperation)
+	by := encodeCircuitInput(sus)
+	t.Log(by)
 }
 
 func TestHashSignedUserOperationV1s(t *testing.T) {
@@ -99,11 +130,11 @@ func TestEip712(t *testing.T) {
 	sus := CreateUserOps()
 
 	// encode context,used for circuit
-	encodeBytes := EncodeEip712Context(sus)
+	encodeBytes := state.EncodeEip712Context(sus)
 	fmt.Println("BatchData Input", common.Bytes2Hex(encodeBytes))
 
 	// BatchData Hash
-	fmt.Println("AccInput Hash", HashSignedUserOperationV1s(sus))
+	fmt.Println("AccInput Hash", state.HashSignedUserOperationV1s(sus))
 
 	tree := merkletree.NewSMT(newDB(), false)
 

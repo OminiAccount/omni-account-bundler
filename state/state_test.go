@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/pool"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
@@ -35,35 +33,6 @@ func TestBlock(t *testing.T) {
 	t.Log(header.Time)
 	t.Log(header.ParentHash)
 	t.Log(header.Hash())
-}
-
-func TestEncodeCircuitInput(t *testing.T) {
-	userOpDeposit := pool.UserOperation{
-		OperationType:  1,
-		OperationValue: (*hexutil.Big)(big.NewInt(100)),
-		Sender:         common.HexToAddress("0xd09d22e15b8c387a023811e5c1021b441b8f0e5a"),
-		Exec: pool.ExecData{
-			Nonce:                  1,
-			ChainId:                hexutil.Uint64(28516),
-			CallData:               common.FromHex("0x"),
-			MainChainGasLimit:      0x30d40,
-			DestChainGasLimit:      0,
-			ZkVerificationGasLimit: 0x898,
-			MainChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
-			DestChainGasPrice:      (*hexutil.Big)(big.NewInt(100)),
-		},
-	}
-	t.Logf("%+v", userOpDeposit)
-	dataHash := userOpDeposit.CalculateEIP712TypeDataHash()
-	signedUserOperation := pool.SignedUserOperation{
-		UserOperation: &userOpDeposit,
-		Signature:     signMessage(dataHash),
-	}
-	t.Logf("%+v", signedUserOperation.Signature)
-	var sus []*pool.SignedUserOperation
-	sus = append(sus, &signedUserOperation)
-	by := encodeCircuitInput(sus)
-	t.Log(by)
 }
 
 func hexTo(hex string) *hexutil.Big {

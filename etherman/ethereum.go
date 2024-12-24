@@ -2,18 +2,17 @@ package etherman
 
 import (
 	"context"
-	"fmt"
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
-	"github.com/OAB/utils/msgpack"
-	"github.com/OAB/utils/packutils"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,18 +24,18 @@ type EtherMan struct {
 	cancel       func()
 	cfg          Config
 	chainsClient map[chains.ChainId]*EthereumClient
-	db           ethdb.Database
+	db           *PostgresStorage
 }
 
 // NewEthereum create a EthereumClient that support multiple chains
-func NewEthereum(ctx context.Context, cfg Config, ethDb ethdb.Database) (*EtherMan, error) {
+func NewEthereum(ctx context.Context, cfg Config, pg *pgxpool.Pool) (*EtherMan, error) {
 	etherCtx, cancel := context.WithCancel(ctx)
 	em := &EtherMan{
 		ctx:          etherCtx,
 		cancel:       cancel,
 		cfg:          cfg,
 		chainsClient: make(map[chains.ChainId]*EthereumClient, chains.MaxChainInfoLength),
-		db:           ethDb,
+		db:           NewPostgresStorage(pg),
 	}
 	var nw = []Network{
 		cfg.VizingNetwork,
@@ -118,34 +117,35 @@ func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint
 	ccli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	ccli.lock.Lock()
 	defer ccli.lock.Unlock()
-	var salt uint64
-	chainSaltKey := fmt.Sprintf(SaltKey, uint64(ccli.chainID))
-	has, err := ether.db.Has([]byte(chainSaltKey))
+	dbTx, err := ether.db.BeginDBTransaction(ether.ctx)
 	if err != nil {
-		log.Errorf("[CreateAccount] read db err: %+v", err)
-		return nil, salt
+		log.Errorf("use db transaction err: %+v", err)
+		return nil, 0
 	}
-	if has {
-		data, err := ether.db.Get([]byte(chainSaltKey))
-		if err != nil {
-			log.Errorf("[CreateAccount] from db get data err: %+v", err)
-			return nil, salt
-		}
-		salt = packutils.BytesToUint64(data)
-	}
+	salt := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), dbTx)
 	log.Infof("[CreateAccount] chainID: %d, salt: %d", ccli.chainID, salt)
 	opts := new(bind.CallOpts)
 	opts.From = ccli.sender
 	adr, err := ccli.aaFactory.GetAccountAddress(opts, user, big.NewInt(0).SetUint64(salt))
 	if err != nil {
+		_ = dbTx.Rollback(ether.ctx)
 		log.Errorf("get create account err: %+v", err)
 		return nil, salt
 	}
-	err = ether.db.Put([]byte(chainSaltKey), packutils.Uint64ToBytes(salt))
+	err = ether.db.SetChain(ether.ctx, uint64(ccli.chainID), salt+1, "salt", dbTx)
 	if err != nil {
-		log.Errorf("put salt key to db err: %+v", err)
+		_ = dbTx.Rollback(ether.ctx)
+		log.Errorf("set chain salt err: %+v", err)
 		return nil, salt
 	}
+	err = dbTx.Commit(ether.ctx)
+	if err != nil {
+		log.Errorf("db commit err: %+v", err)
+	}
+	log.Infof("==============================")
+	salt2 := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), nil)
+	log.Infof("check add salt: %d", ccli.chainID, salt2)
+	log.Infof("==============================")
 	for _, cli := range ether.chainsClient {
 		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
 	}
@@ -177,52 +177,10 @@ func (ether *EtherMan) pendingCreateAA(pd PendingData) {
 }
 
 func (ether *EtherMan) saveFailedCreateAA(pd PendingData, isDel bool) {
-	pendingKey := fmt.Sprintf(PendingCreateAAKey, pd.ChainID)
-	pdm := ether.loadPendingData(pd.ChainID)
-	if pdm == nil {
-		return
-	}
-	if isDel {
-		delete(pdm, pd.User.Hex())
-	} else {
-		pdm[pd.User.Hex()] = pd
-	}
-	by, err := msgpack.MarshalStruct(pdm)
+	err := ether.db.UpdateUserFailedSalt(ether.ctx, pd.User.String(), uint64(pd.ChainID), isDel, nil)
 	if err != nil {
-		log.Errorf("chainID: %d, MarshalStruct err: %+v", pd.ChainID, err)
-		return
+		log.Errorf("chain: %d, user: %s, saveFailedCreateAA err: %+v", pd.ChainID, pd.User, err)
 	}
-	err = ether.db.Put([]byte(pendingKey), by)
-	if err != nil {
-		log.Errorf("chainID: %d, put pending key to db err: %+v", pd.ChainID, err)
-		return
-	}
-}
-
-func (ether *EtherMan) loadPendingData(cid chains.ChainId) map[string]PendingData {
-	pendingKey := fmt.Sprintf(PendingCreateAAKey, cid)
-	has, err := ether.db.Has([]byte(pendingKey))
-	if err != nil {
-		log.Errorf("[saveFailedCreateAA] chainID: %d, read db err: %+v", cid, err)
-		return nil
-	}
-	var pdm map[string]PendingData
-	if has {
-		data, err := ether.db.Get([]byte(pendingKey))
-		if err != nil {
-			log.Errorf("[saveFailedCreateAA] chainID: %d, from db get data err: %+v", cid, err)
-			return nil
-		}
-		decodeData, err := msgpack.UnmarshalStruct[map[string]PendingData](data)
-		if err != nil {
-			log.Errorf("[saveFailedCreateAA] chainID: %d, UnmarshalStruct err: %+v", cid, err)
-			return nil
-		}
-		pdm = decodeData
-	} else {
-		pdm = make(map[string]PendingData)
-	}
-	return pdm
 }
 
 func (ether *EtherMan) Start() {
@@ -231,13 +189,25 @@ func (ether *EtherMan) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				for cid, _ := range ether.chainsClient {
-					pdm := ether.loadPendingData(cid)
-					if pdm == nil {
-						return
+				list := ether.db.GetFailedSalts(ether.ctx, nil)
+				if list == nil || len(list) < 1 {
+					continue
+				}
+				for _, ufs := range list {
+					cids := strings.Split(ufs.FailedSalt, ",")
+					if len(cids) < 1 {
+						continue
 					}
-					for _, pd := range pdm {
-						ether.pendingCreateAA(pd)
+					for _, cid := range cids {
+						nid, err := strconv.ParseUint(cid, 10, 64)
+						if err != nil {
+							continue
+						}
+						ether.pendingCreateAA(PendingData{
+							User:    common.HexToAddress(ufs.User),
+							ChainID: chains.ChainId(nid),
+							Salt:    ufs.Salt,
+						})
 					}
 				}
 			case <-ether.ctx.Done():

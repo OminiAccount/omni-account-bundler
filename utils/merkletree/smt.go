@@ -27,8 +27,6 @@ type MemDB interface {
 	CommitBatch() error
 	OpenBatch(quitCh <-chan struct{})
 	RollbackBatch()
-	Cache() error
-	LoadCache() error
 	RoDB
 }
 

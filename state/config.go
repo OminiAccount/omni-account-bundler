@@ -1,5 +1,7 @@
 package state
 
+import "github.com/OAB/utils/apitypes"
+
 type Config struct {
-	MaxBatches int `mapstructure:"max-batches"`
+	HisInterval apitypes.Duration `mapstructure:"his-interval"`
 }
