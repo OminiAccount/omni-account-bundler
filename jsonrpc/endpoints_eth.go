@@ -87,7 +87,12 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 	//if err != nil {
 	//	return nil, err
 	//}
-	log.Info(accInfo.Chain[chainId].Gas.Uint64())
+	if accInfo.Uid < 1 {
+		return nil, fmt.Errorf("account not exist")
+	}
+	if _, ok := accInfo.Chain[chainId]; !ok {
+		return nil, fmt.Errorf("chain:%d does not exist this account", chainId)
+	}
 	return types.AccountInfo{
 		Balance: hex.EncodeBig(accInfo.Chain[chainId].Gas),
 		Nonce:   accInfo.Chain[chainId].Nonce + 1,
@@ -115,6 +120,9 @@ func (e *EthEndpoints) GetUserHistory(user, account common.Address, timestamp ui
 	ai, err := e.state.GetAccountInfo(user, account)
 	if err != nil {
 		return nil, err
+	}
+	if ai.Uid < 1 {
+		return nil, fmt.Errorf("account not exist")
 	}
 	if timestamp < 1 {
 		timestamp = uint64(time.Now().Unix())

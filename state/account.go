@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"fmt"
+	"github.com/OAB/etherman"
 	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
@@ -298,12 +299,15 @@ func (s *State) GetAccountOps(uid uint64) ([]*UserOperation, error) {
 }
 
 func (s *State) CreateAccount(user common.Address) *common.Address {
-	adr, salt := s.ethereum.CreateAccount(user)
+	adr, salt, err := s.ethereum.CreateAccount(user)
+	if errors.Is(err, etherman.ErrExistAccount) {
+		return adr
+	}
 	if adr == nil {
 		return nil
 	}
 	log.Infof("user: %s, account: %s, salt: %d", user, adr, salt)
-	err := s.db.AddUser(s.ctx, AccountMapping{
+	err = s.db.AddUser(s.ctx, AccountMapping{
 		User:    user,
 		Account: *adr,
 		Salt:    salt,

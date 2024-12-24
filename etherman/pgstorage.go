@@ -172,3 +172,19 @@ func (p *PostgresStorage) GetFailedSalts(ctx context.Context, dbTx pgx.Tx) []Use
 	}
 	return list
 }
+
+func (p *PostgresStorage) IsExistChainByOwner(ctx context.Context, owner string, nid uint64, dbTx pgx.Tx) (bool, error) {
+	getSQL := `
+		SELECT u.id FROM omni.user u INNER JOIN omni.user_info ui ON u.id=ui.user_id WHERE u.owner=$1 AND ui.network_id=$2 LIMIT 1;
+	`
+	e := p.getExecQuerier(dbTx)
+	var uid uint64
+	err := e.QueryRow(ctx, getSQL, strings.ToLower(owner), nid).Scan(&uid)
+	if errors.Is(err, pgx.ErrNoRows) || uid < 1 {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
