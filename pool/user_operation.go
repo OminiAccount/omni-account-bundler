@@ -119,6 +119,14 @@ func (u *UserOperation) PackOperation() []byte {
 	return encodeBytes
 }
 
+func (u *UserOperation) HasInnerExec() byte {
+	if u.ChainId1.Uint64() == 0 {
+		return 0
+	} else {
+		return 1
+	}
+}
+
 func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 	domain := apitypes.TypedDataDomain{
 		Name:    EIP712DomainName,
@@ -224,6 +232,13 @@ func (s *SignedUserOperation) Encode() []byte {
 	encodeBytes = append(encodeBytes, s.PackChainGasLimit()...)
 	encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.ZkVerificationGasLimit)), 32)...)
 	encodeBytes = append(encodeBytes, s.PackChainGasPrice()...)
+	if s.HasInnerExec() == 1 {
+		encodeBytes = append(encodeBytes, s.PackOpInfo1()...)
+		encodeBytes = append(encodeBytes, crypto.Keccak256(s.CallData1)...)
+		encodeBytes = append(encodeBytes, s.PackChainGasLimit1()...)
+		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.ZkVerificationGasLimit1)), 32)...)
+		encodeBytes = append(encodeBytes, s.PackChainGasPrice1()...)
+	}
 	encodeBytes = append(encodeBytes, s.Owner.Bytes()...)
 
 	return encodeBytes
@@ -248,6 +263,14 @@ func EncodeEip712Context(sus []*SignedUserOperation) []byte {
 		encodeBytes = append(encodeBytes, su.PackChainGasLimit()...)
 		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(su.ZkVerificationGasLimit)), 32)...)
 		encodeBytes = append(encodeBytes, su.PackChainGasPrice()...)
+		encodeBytes = append(encodeBytes, []byte{su.HasInnerExec()}...)
+		if su.HasInnerExec() == 1 {
+			encodeBytes = append(encodeBytes, su.PackOpInfo1()...)
+			encodeBytes = append(encodeBytes, crypto.Keccak256(su.CallData1)...)
+			encodeBytes = append(encodeBytes, su.PackChainGasLimit1()...)
+			encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(su.ZkVerificationGasLimit1)), 32)...)
+			encodeBytes = append(encodeBytes, su.PackChainGasPrice1()...)
+		}
 		encodeBytes = append(encodeBytes, su.Signature...)
 	}
 
