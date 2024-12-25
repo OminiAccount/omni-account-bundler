@@ -47,7 +47,7 @@ func NewMemoryPool(cfg Config, ether EthereumInterface, s StateInterface, pg *pg
 func (p *Pool) StartAutoFlush() {
 	log.Info("pool start")
 	go func() {
-		ticker := time.NewTicker(time.Minute * 25)
+		ticker := time.NewTicker(time.Minute * 10)
 		for {
 			select {
 			case <-ticker.C:
@@ -63,7 +63,7 @@ func (p *Pool) StartAutoFlush() {
 			if p.ctx.Err() != nil {
 				return
 			}
-			err := p.executeBatch()
+			err := p.verifyProof()
 			if err != nil {
 				if !errors.Is(err, pgx.ErrNoRows) {
 					log.Errorf("send batch to verify error: %s", err.Error())

@@ -54,7 +54,7 @@ func (s *State) Start() {
 		}
 		for {
 			// deposit
-			time.Sleep(time.Minute * 5)
+			time.Sleep(time.Minute * 3)
 			log.Infof("add test deposit...")
 			accInfo, _ := s.GetAccountInfo(testUser, *testAcc)
 			suo := &SignedUserOperation{
@@ -122,7 +122,7 @@ func (s *State) Start() {
 			}
 
 			// withdraw
-			time.Sleep(time.Minute * 5)
+			time.Sleep(time.Minute * 3)
 			log.Infof("add test withdraw...")
 			accInfo, _ = s.GetAccountInfo(testUser, *testAcc)
 			suo2 := &SignedUserOperation{
@@ -158,7 +158,7 @@ func (s *State) Start() {
 			}
 			signature[crypto.RecoveryIDOffset] += 27
 			suo2.Signature = signature
-			hashBytes := crypto.Keccak256Hash(suo2.Encode())
+			hashBytes := crypto.Keccak256Hash(suo2.Encode(true))
 			suo2.Did = hashBytes.Hex()
 			dbTx, err = s.db.BeginDBTransaction(s.ctx)
 			if err != nil {

@@ -29,15 +29,16 @@ CREATE TABLE omni.user_info
 
 CREATE TABLE omni.batch
 (
-    batch_num       BIGINT PRIMARY KEY,
-    batch_hash      VARCHAR,
-    old_state_root  VARCHAR,
-    state_root      VARCHAR,
-    acc_input_hash  VARCHAR,
-    encoded         VARCHAR,
-    status          INTEGER,
-    create_at       TIMESTAMP WITH TIME ZONE NOT NULL,
-    update_at       TIMESTAMP WITH TIME ZONE NOT NULL
+    batch_num           BIGINT PRIMARY KEY,
+    batch_hash          VARCHAR,
+    old_state_root      VARCHAR,
+    state_root          VARCHAR,
+    old_acc_input_hash  VARCHAR,
+    acc_input_hash      VARCHAR,
+    encoded             VARCHAR,
+    status              INTEGER,
+    create_at           TIMESTAMP WITH TIME ZONE NOT NULL,
+    update_at           TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 CREATE TABLE omni.proof
@@ -78,7 +79,8 @@ CREATE TABLE omni.operation
     inner_exec_dest_gas_limit  BIGINT,
     inner_exec_dest_gas_price  VARCHAR,
     create_at                  TIMESTAMP WITH TIME ZONE NOT NULL,
-    update_at                  TIMESTAMP WITH TIME ZONE NOT NULL
+    update_at                  TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT sig_unique UNIQUE (signature)
 );
 
 CREATE TABLE omni.chain_height

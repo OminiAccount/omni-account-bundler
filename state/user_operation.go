@@ -221,11 +221,10 @@ func (s *SignedUserOperation) RecoverAddress() common.Address {
 }
 
 // Encode Returns the bytes value of the EIP712 value + recover address
-func (s *SignedUserOperation) Encode() []byte {
+func (s *SignedUserOperation) Encode(isPackOwner bool) []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, s.PackOperation()...)
 	encodeBytes = append(encodeBytes, common.LeftPadBytes(s.Sender.Bytes(), 32)...)
-	encodeBytes = append(encodeBytes, common.LeftPadBytes(s.Owner.Bytes(), 32)...)
 	if s.Exec.ChainId > 0 {
 		encodeBytes = append(encodeBytes, s.PackOpInfo(s.Exec)...)
 		encodeBytes = append(encodeBytes, crypto.Keccak256(s.Exec.CallData)...)
@@ -239,6 +238,9 @@ func (s *SignedUserOperation) Encode() []byte {
 		encodeBytes = append(encodeBytes, s.PackChainGasLimit(s.InnerExec)...)
 		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.InnerExec.ZkVerificationGasLimit)), 32)...)
 		encodeBytes = append(encodeBytes, s.PackChainGasPrice(s.InnerExec)...)
+	}
+	if isPackOwner {
+		encodeBytes = append(encodeBytes, s.Owner.Bytes()...)
 	}
 	return encodeBytes
 }
@@ -271,7 +273,7 @@ func EncodeEip712Context(sus []*SignedUserOperation) []byte {
 func HashSignedUserOperationV1s(sus []*SignedUserOperation) common.Hash {
 	var encodeBytes []byte
 	for _, su := range sus {
-		encodeBytes = append(encodeBytes, su.Encode()...)
+		encodeBytes = append(encodeBytes, su.Encode(true)...)
 	}
 
 	hashBytes, _ := poseidon2.HashMessage(encodeBytes)

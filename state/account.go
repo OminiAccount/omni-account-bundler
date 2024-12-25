@@ -140,11 +140,13 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *SignedUserOperation) erro
 			log.Infof("deposit did: %s", suop.Did)
 		}
 	} else if suop.Did == "" {
-		hashBytes := crypto.Keccak256Hash(suop.Encode())
+		hashBytes := crypto.Keccak256Hash(suop.Encode(true))
 		suop.Did = hashBytes.Hex()
 		log.Infof("signedUserOperation did: %s", suop.Did)
 		suop.Status = PendingStatus
 	}
+	// TODO query exits
+
 	dbTx, err := s.db.BeginDBTransaction(s.ctx)
 	if err != nil {
 		log.Errorf("%+v, use db transaction err: %+v", suop.UserOperation, err)

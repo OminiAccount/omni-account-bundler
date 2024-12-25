@@ -26,6 +26,7 @@ func (p *Pool) processBatch() {
 	}
 	// Set old smt root
 	batch.SetOldStateRoot(oldBatch.NewStateRoot)
+	batch.SetOldAccInputHash(oldBatch.NewAccInputHash)
 	dbTx, err := p.db.BeginDBTransaction(p.ctx)
 	if err != nil {
 		log.Errorf("use db transaction err: %+v", err)
@@ -132,8 +133,8 @@ func (p *Pool) processBatch() {
 	log.Infof("Successfully sealing a batch, number: %d, stateRoot: %s", batch.NewNumBatch, batch.NewStateRoot.Hex())
 }
 
-func (p *Pool) executeBatch() error {
-	log.Info("executing batch...")
+func (p *Pool) verifyProof() error {
+	log.Info("verify proof...")
 	verifyBatch, err := p.db.GetLatestBatch(p.ctx, state.SuccessStatus, nil)
 	if err != nil {
 		return err

@@ -51,7 +51,7 @@ func encodeCircuitInput(sus []*state.SignedUserOperation) []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, byte(len(sus)))
 	for _, su := range sus {
-		suByte := su.Encode()
+		suByte := su.Encode(false)
 		suByte = append(suByte, su.Signature...)
 		encodeBytes = append(encodeBytes, suByte...)
 	}
@@ -84,7 +84,7 @@ func (b *Batch) SetBatchL2Data(sus []*state.SignedUserOperation) {
 func batchHashData(sus []*state.SignedUserOperation) common.Hash {
 	var encodeBytes []byte
 	for _, su := range sus {
-		encodeBytes = append(encodeBytes, su.Encode()...)
+		encodeBytes = append(encodeBytes, su.Encode(true)...)
 	}
 
 	hashBytes, _ := poseidon.HashMessage(encodeBytes)

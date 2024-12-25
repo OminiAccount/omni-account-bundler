@@ -8,6 +8,7 @@ import (
 	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 	"time"
 )
 
@@ -66,7 +67,10 @@ func (e *EthEndpoints) SetBatchProofResult(result pool.ProofResult) error {
 	return e.pool.SetBatchProofResult(&result)
 }
 
-func (e *EthEndpoints) CreateUserAccount(user common.Address) interface{} {
+func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) interface{} {
+	if user.Hex() == "" || user.Hex() == "0x" || chainId < 1 {
+		return fmt.Errorf("params error")
+	}
 	adr := e.state.GetAccountAdr(user)
 	if adr != nil {
 		return adr
@@ -90,12 +94,15 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 	if accInfo.Uid < 1 {
 		return nil, fmt.Errorf("account not exist")
 	}
-	if _, ok := accInfo.Chain[chainId]; !ok {
-		return nil, fmt.Errorf("chain:%d does not exist this account", chainId)
+	balance := big.NewInt(0)
+	nonce := uint64(1)
+	if _, ok := accInfo.Chain[chainId]; ok {
+		balance = accInfo.Chain[chainId].Gas
+		nonce = accInfo.Chain[chainId].Nonce + 1
 	}
 	return types.AccountInfo{
-		Balance: hex.EncodeBig(accInfo.Chain[chainId].Gas),
-		Nonce:   accInfo.Chain[chainId].Nonce + 1,
+		Balance: hex.EncodeBig(balance),
+		Nonce:   nonce,
 		//UserOperations: uos,
 	}, nil
 }

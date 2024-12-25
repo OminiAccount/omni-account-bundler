@@ -102,14 +102,14 @@ func (p *PostgresStorage) AddProof(ctx context.Context, r *ProofResult, dbTx pgx
 func (p *PostgresStorage) AddBatch(ctx context.Context, b *Batch, dbTx pgx.Tx) error {
 	addSQL := `
 		INSERT INTO omni.batch (
-			batch_num, batch_hash, old_state_root, state_root, acc_input_hash, encoded, status, create_at, update_at
+			batch_num,batch_hash,old_state_root,state_root,old_acc_input_hash,acc_input_hash,encoded,status,create_at,update_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 		);
 	`
 	e := p.getExecQuerier(dbTx)
 	_, err := e.Exec(ctx, addSQL, b.NewNumBatch, b.BatchHashData.Hex(), b.OldStateRoot.Hex(), b.NewStateRoot.Hex(),
-		b.NewAccInputHash.Hex(), b.BatchL2Data.String(), b.Status, time.Now(), time.Now(),
+		b.OldAccInputHash.Hex(), b.NewAccInputHash.Hex(), b.BatchL2Data.String(), b.Status, time.Now(), time.Now(),
 	)
 	return err
 }
@@ -117,19 +117,21 @@ func (p *PostgresStorage) AddBatch(ctx context.Context, b *Batch, dbTx pgx.Tx) e
 func (p *PostgresStorage) GetLatestBatch(ctx context.Context, status uint64, dbTx pgx.Tx) (Batch, error) {
 	getSQL := `
 		SELECT 
-			batch_num, batch_hash, old_state_root, state_root, acc_input_hash, encoded, status, create_at
+			batch_num,batch_hash,old_state_root,state_root,old_acc_input_hash,acc_input_hash,encoded,status,create_at
 		FROM omni.batch 
 		WHERE status = $1 ORDER BY batch_num DESC LIMIT 1;
 	`
 	e := p.getExecQuerier(dbTx)
 	var b Batch
-	var hashStr, oldStateStr, stateStr, aihStr, encodeStr string
+	var hashStr, oldStateStr, stateStr, oldAihStr, aihStr, encodeStr string
 	err := e.QueryRow(ctx, getSQL, status).Scan(
-		&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
+		&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &oldAihStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		b.OldStateRoot = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 		b.NewStateRoot = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+		b.OldAccInputHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
+		b.NewAccInputHash = common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000")
 		return b, nil
 	} else if err != nil {
 		return b, err
@@ -137,6 +139,7 @@ func (p *PostgresStorage) GetLatestBatch(ctx context.Context, status uint64, dbT
 	b.BatchHashData = common.HexToHash(hashStr)
 	b.OldStateRoot = common.HexToHash(oldStateStr)
 	b.NewStateRoot = common.HexToHash(stateStr)
+	b.OldAccInputHash = common.HexToHash(oldAihStr)
 	b.NewAccInputHash = common.HexToHash(aihStr)
 	b.BatchL2Data = common.Hex2Bytes(strings.TrimPrefix(encodeStr, "0x"))
 	return b, err
@@ -145,7 +148,7 @@ func (p *PostgresStorage) GetLatestBatch(ctx context.Context, status uint64, dbT
 func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, dbTx pgx.Tx) ([]*Batch, error) {
 	getSQL := `
 		SELECT 
-		b.batch_num, b.batch_hash, b.old_state_root, b.state_root, b.acc_input_hash, b.encoded, b.status, b.create_at, o.*
+		b.batch_num,b.batch_hash,b.old_state_root,b.state_root,b.old_acc_input_hash,b.acc_input_hash,b.encoded,b.status,b.create_at,o.*
 		FROM omni.batch b
 		LEFT JOIN omni.operation o ON o.batch_num = b.batch_num 
 		WHERE b.status=$1 AND o.status=$2 AND b.batch_num>=$3 AND b.batch_num<=$4 ORDER BY b.batch_num,o.id ASC;
@@ -162,11 +165,11 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		b := &Batch{}
 		op := &state.SignedUserOperation{}
 		op.UserOperation = &state.UserOperation{}
-		var opValue, hashStr, oldStateStr, stateStr, aihStr, encodeStr string
+		var opValue, hashStr, oldStateStr, stateStr, oldAihStr, aihStr, encodeStr string
 		var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
 		var updateAt time.Time
 		err := rows.Scan(
-			&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
+			&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &oldAihStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
 			&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &op.Signature, &op.Did, &op.OperationType, &opValue,
 			&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 			&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
@@ -200,6 +203,7 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		b.BatchHashData = common.HexToHash(hashStr)
 		b.OldStateRoot = common.HexToHash(oldStateStr)
 		b.NewStateRoot = common.HexToHash(stateStr)
+		b.OldAccInputHash = common.HexToHash(oldAihStr)
 		b.NewAccInputHash = common.HexToHash(aihStr)
 		b.BatchL2Data = common.Hex2Bytes(strings.TrimPrefix(encodeStr, "0x"))
 		if lb, ok := listM[b.NewNumBatch]; !ok {

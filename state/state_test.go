@@ -6,11 +6,27 @@ import (
 	"fmt"
 	"github.com/OAB/lib/common/hexutil"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
 	"testing"
 )
+
+func TestDepositDid(t *testing.T) {
+	sender := common.HexToAddress("0x3307c5023677a4c085855117fa8bbce765e9246f")
+	chainID := hexutil.Uint64(28516)
+	nonce := hexutil.Uint64(3)
+	val := big.NewInt(20000000000000000)
+
+	var encodeBytes []byte
+	encodeBytes = append(encodeBytes, sender.Bytes()...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(chainID)).Bytes(), 32)...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(big.NewInt(int64(nonce)).Bytes(), 32)...)
+	encodeBytes = append(encodeBytes, common.LeftPadBytes(val.Bytes(), 32)...)
+	hash := crypto.Keccak256Hash(encodeBytes).Hex()
+	t.Log(hash)
+}
 
 func TestBlock(t *testing.T) {
 	cli, err := ethclient.Dial("https://sepolia-rollup.arbitrum.io/rpc")
