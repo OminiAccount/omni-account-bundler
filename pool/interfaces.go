@@ -19,5 +19,6 @@ type (
 	StateInterface interface {
 		GetHisIns() *state.HistoryManager
 		GetTree() *merkletree.SMT
+		GetAccountInfoByChain(common.Address, uint64) (*state.AccountInfo, error)
 	}
 )

@@ -114,7 +114,7 @@ func (p *PostgresStorage) AddBatch(ctx context.Context, b *Batch, dbTx pgx.Tx) e
 	return err
 }
 
-func (p *PostgresStorage) GetLatestBatch(ctx context.Context, status uint64, dbTx pgx.Tx) (Batch, error) {
+func (p *PostgresStorage) GetBatchNoOp(ctx context.Context, status uint64, dbTx pgx.Tx) (Batch, error) {
 	getSQL := `
 		SELECT 
 			batch_num,batch_hash,old_state_root,state_root,old_acc_input_hash,acc_input_hash,encoded,status,create_at
@@ -165,12 +165,12 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		b := &Batch{}
 		op := &state.SignedUserOperation{}
 		op.UserOperation = &state.UserOperation{}
-		var opValue, hashStr, oldStateStr, stateStr, oldAihStr, aihStr, encodeStr string
+		var opValue, hashStr, oldStateStr, stateStr, oldAihStr, aihStr, encodeStr, sigStr string
 		var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
 		var updateAt time.Time
 		err := rows.Scan(
 			&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &oldAihStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
-			&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &op.Signature, &op.Did, &op.OperationType, &opValue,
+			&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &sigStr, &op.Did, &op.OperationType, &opValue,
 			&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 			&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 			&execDestGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
@@ -183,6 +183,7 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		if opValue == "" {
 			opValue = "0x0"
 		}
+		op.Signature = common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
 		op.OperationValue = (*hexutil.Big)(hex.DecodeBig(opValue))
 		if execMainGasPrice == "" {
 			execMainGasPrice = "0x0"
@@ -297,9 +298,10 @@ func scanOperation(row pgx.Row) (*state.SignedUserOperation, error) {
 	op := &state.SignedUserOperation{}
 	op.UserOperation = &state.UserOperation{}
 	var updateAt time.Time
-	var opValue, execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
+	var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
+	var opValue, sigStr string
 	err := row.Scan(
-		&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &op.Signature, &op.Did, &op.OperationType, &opValue,
+		&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &sigStr, &op.Did, &op.OperationType, &opValue,
 		&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 		&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 		&execDestGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
@@ -309,6 +311,7 @@ func scanOperation(row pgx.Row) (*state.SignedUserOperation, error) {
 	if err != nil {
 		return nil, err
 	}
+	op.Signature = common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
 	if opValue == "" {
 		opValue = "0x0"
 	}
@@ -329,6 +332,6 @@ func scanOperation(row pgx.Row) (*state.SignedUserOperation, error) {
 		iexecDestGasPrice = "0x0"
 	}
 	op.InnerExec.DestChainGasPrice = (*hexutil.Big)(hex.DecodeBig(iexecDestGasPrice))
-	log.Infof("%+v %+v", op.Signature, op.UserOperation)
+	log.Infof("%s %+v", op.Signature, op.UserOperation)
 	return op, nil
 }

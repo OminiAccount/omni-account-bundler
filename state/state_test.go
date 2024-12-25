@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"math/big"
+	"strings"
 	"testing"
 )
 
@@ -70,4 +71,54 @@ func signMessage(dataHash []byte) (signature []byte) {
 	signature[crypto.RecoveryIDOffset] += 27 // Transform yellow paper V from 0/1 to 27/28
 
 	return signature
+}
+
+func TestSignedUserOperation(t *testing.T) {
+	testPrk := "82693fc767eb00e3288a01b7516f3a98269882e951be74403e4061d898ea0929"
+	testUser := common.HexToAddress("0x7c38C1646213255f62dB509688B8fA062e0Ed8e4")
+	testAcc := common.HexToAddress("0x65278ef7227697f934d03ef3dcb8f0f6ee822230")
+	suo := &SignedUserOperation{
+		UserOperation: &UserOperation{
+			Uid:            1,
+			Owner:          testUser,
+			OperationType:  DepositAction,
+			OperationValue: (*hexutil.Big)(big.NewInt(20000000000000000)),
+			Sender:         testAcc,
+			Exec: ExecData{
+				ChainId:                28516,
+				Nonce:                  hexutil.Uint64(1),
+				CallData:               hexutil.Bytes(""),
+				MainChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
+				MainChainGasLimit:      hexutil.Uint64(10),
+				DestChainGasPrice:      (*hexutil.Big)(big.NewInt(20)),
+				DestChainGasLimit:      hexutil.Uint64(10),
+				ZkVerificationGasLimit: hexutil.Uint64(10),
+			},
+			InnerExec: ExecData{},
+			Status:    PendingStatus,
+		},
+	}
+	privateKey, err := crypto.HexToECDSA(testPrk)
+	if err != nil {
+		t.Errorf("Error generating private key: %v", err)
+		return
+	}
+	signature, err := crypto.Sign(accounts.TextHash(suo.CalculateEIP712TypeDataHash()), privateKey)
+	if err != nil {
+		t.Errorf("Failed to sign hash typed data: %v", err)
+		return
+	}
+	signature[crypto.RecoveryIDOffset] += 27
+	suo.Signature = signature
+	suo.Did = getDepositID(suo)
+
+	sigStr := suo.Signature.String()
+	//t.Log(sigStr)
+	sigBy := common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
+	sigStr2 := "0x" + common.Bytes2Hex(sigBy)
+	t.Log(sigStr == sigStr2)
+
+	owner := suo.RecoverAddress()
+	t.Log(owner.Hex())
+	t.Log(testUser.Hex())
 }

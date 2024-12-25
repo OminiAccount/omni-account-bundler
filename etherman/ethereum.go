@@ -175,7 +175,7 @@ func (ether *EtherMan) CreateVizingAccount(user common.Address) (*common.Address
 	}
 	log.Infof("==============================")
 	salt2 := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), nil)
-	log.Infof("check add salt: %d", ccli.chainID, salt2)
+	log.Infof("chainID: %d, check add salt: %d -> %d", ccli.chainID, salt, salt2)
 	log.Infof("==============================")
 	/*for _, cli := range ether.chainsClient {
 		if cli.chainID == ether.cfg.VizingNetwork.ChainId {

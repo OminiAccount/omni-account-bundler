@@ -6,6 +6,7 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/utils/poseidon"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"time"
 )
 
@@ -51,7 +52,7 @@ func encodeCircuitInput(sus []*state.SignedUserOperation) []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, byte(len(sus)))
 	for _, su := range sus {
-		suByte := su.Encode(false)
+		suByte := su.Encode(false, true)
 		suByte = append(suByte, su.Signature...)
 		encodeBytes = append(encodeBytes, suByte...)
 	}
@@ -71,27 +72,21 @@ func (b *Batch) SetOldAccInputHash(value common.Hash) {
 	b.OldAccInputHash = value
 }
 
-func (b *Batch) SetNewAccInputHash(value common.Hash) {
-	b.NewAccInputHash = value
+func (b *Batch) SetNewAccInputHash(sus []*state.SignedUserOperation) {
+	b.NewAccInputHash = accInputData(sus)
+}
+
+func accInputData(sus []*state.SignedUserOperation) common.Hash {
+	var encodeBytes []byte
+	for _, su := range sus {
+		encodeBytes = append(encodeBytes, su.Encode(true, false)...)
+	}
+	hashBytes, _ := poseidon.HashMessage(encodeBytes)
+	return common.BytesToHash(poseidon.H4ToBytes(hashBytes))
 }
 
 func (b *Batch) SetBatchL2Data(sus []*state.SignedUserOperation) {
 	b.BatchL2SrcData = sus
 	b.BatchL2Data = encodeCircuitInput(sus)
-	b.SetBatchHashData(sus)
-}
-
-func batchHashData(sus []*state.SignedUserOperation) common.Hash {
-	var encodeBytes []byte
-	for _, su := range sus {
-		encodeBytes = append(encodeBytes, su.Encode(true)...)
-	}
-
-	hashBytes, _ := poseidon.HashMessage(encodeBytes)
-
-	return common.BytesToHash(poseidon.H4ToBytes(hashBytes))
-}
-
-func (b *Batch) SetBatchHashData(sus []*state.SignedUserOperation) {
-	b.BatchHashData = batchHashData(sus)
+	b.BatchHashData = crypto.Keccak256Hash(b.BatchL2Data)
 }

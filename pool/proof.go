@@ -8,12 +8,13 @@ import (
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
+	"github.com/jackc/pgx/v4"
 	"math/big"
 )
 
 func (p *Pool) processBatch() {
 	log.Infof("processBatch...")
-	oldBatch, err := p.db.GetLatestBatch(p.ctx, state.PendingStatus, nil)
+	oldBatch, err := p.db.GetBatchNoOp(p.ctx, state.PendingStatus, nil)
 	if err != nil {
 		log.Errorf("get latest batch err: %+v", err)
 		return
@@ -38,89 +39,21 @@ func (p *Pool) processBatch() {
 		log.Errorf("get pending op list err: %+v", err)
 		return
 	}
-	for _, uo := range list {
-		log.Infof("operation: %+v ===============", uo)
-		if uo.Phase != state.PhaseFirst {
-			continue
-		}
-		// balance
-		var balance big.Int
-		var balanceU256 *uint256.Int
-		balanceU256, err = p.state.GetTree().GetAccountBalance(uo.Sender)
+	for i, uo := range list {
+		isR, err := p.calculateOp(batch.NewNumBatch, uo, dbTx)
 		if err != nil {
-			break
+			_ = dbTx.Rollback(p.ctx)
+			log.Errorf("check op err: %+v", err)
+			return
 		}
-		balance.SetBytes(balanceU256.Bytes())
-		log.Infof("oldBalance: %d", &balance)
-
-		if uo.OperationType == 1 {
-			log.Infof("balance %d + operationValue %d", &balance, uo.OperationValue.Uint64())
-			balance.Add(&balance, uo.OperationValue.ToInt())
-		} else if uo.OperationType == 2 {
-			if balance.Cmp(uo.OperationValue.ToInt()) < 0 {
-				log.Errorf("current account balance %d is insufficient to withdraw %d",
-					&balance, uo.OperationValue.Uint64())
-				break
-			}
-			log.Infof("balance %d - operationValue %d", &balance, uo.OperationValue.Uint64())
-			balance.Sub(&balance, uo.OperationValue.ToInt())
+		if isR {
+			list = append(list[:i], list[i+1:]...)
 		}
-
-		log.Infof("balance %d - CalculateGasUsed %s", &balance, uo.CalculateGasUsed())
-		balance.Sub(&balance, uo.CalculateGasUsed())
-
-		if _, err = p.state.GetTree().SetAccountBalance(uo.Sender.String(), &balance); err != nil {
-			break
-		}
-		log.Infof("newBalance: %d", &balance)
-
-		// nonce
-		var nonce big.Int
-		nonceU256, err := p.state.GetTree().GetAccountNonce(uo.Sender, uo.Exec.ChainId.String())
-		if err != nil {
-			break
-		}
-		nonce.SetBytes(nonceU256.Bytes())
-		log.Infof("phase first oldNonce: %d", &nonce)
-		nonce.Add(&nonce, big.NewInt(1))
-		log.Infof("phase first newNonce: %d", &nonce)
-		_, err = p.state.GetTree().SetAccountNonce(uo.Sender.String(), &nonce, uo.Exec.ChainId.String())
-		if err != nil {
-			break
-		}
-		if uo.InnerExec.ChainId.Uint64() > 0 {
-			var nonce2 big.Int
-			nonceU256, err = p.state.GetTree().GetAccountNonce(uo.Sender, uo.InnerExec.ChainId.String())
-			if err != nil {
-				return
-			}
-			nonce2.SetBytes(nonceU256.Bytes())
-			log.Infof("phase second oldNonce: %d", &nonce2)
-			nonce2.Add(&nonce2, big.NewInt(1))
-			log.Infof("phase second newNonce: %d", &nonce2)
-			_, err = p.state.GetTree().SetAccountNonce(uo.Sender.String(), &nonce2, uo.InnerExec.ChainId.String())
-			if err != nil {
-				break
-			}
-		}
-		err = p.db.UpdateOp(p.ctx, uo.OpId, "batch_num", batch.NewNumBatch, dbTx)
-		if err != nil {
-			break
-		}
-		err = p.db.UpdateOp(p.ctx, uo.OpId, "status", state.BatchStatus, dbTx)
-		if err != nil {
-			break
-		}
-	}
-	if err != nil {
-		_ = dbTx.Rollback(p.ctx)
-		log.Errorf("check op err: %+v", err)
-		return
 	}
 	// Set BatchL2Data and BatchHashData
 	batch.SetBatchL2Data(list)
 	// Set NewAccInputHash
-	batch.SetNewAccInputHash(batch.BatchHashData)
+	batch.SetNewAccInputHash(list)
 	// Set new state root
 	batch.SetNewStateRoot(common.BigToHash(p.state.GetTree().LastRoot()))
 	err = p.db.AddBatch(p.ctx, batch, nil)
@@ -133,9 +66,100 @@ func (p *Pool) processBatch() {
 	log.Infof("Successfully sealing a batch, number: %d, stateRoot: %s", batch.NewNumBatch, batch.NewStateRoot.Hex())
 }
 
+func (p *Pool) calculateOp(batchNum uint64, uo *state.SignedUserOperation, dbTx pgx.Tx) (bool, error) {
+	log.Infof("operation: %+v ===============", uo)
+	if uo.Phase != state.PhaseFirst {
+		ai, _ := p.state.GetAccountInfoByChain(uo.Owner, uo.InnerExec.ChainId.Uint64())
+		if ai == nil {
+			return true, nil
+		}
+		return false, nil
+	}
+	uoOwner := uo.RecoverAddress()
+	if uoOwner.Hex() != uo.Owner.Hex() {
+		log.Errorf("recover address(%s) != owner(%s)", uoOwner.Hex(), uo.Owner.Hex())
+		_ = p.db.UpdateOp(p.ctx, uo.OpId, "status", state.FailedStatus, nil)
+		return true, nil
+	}
+	ai, _ := p.state.GetAccountInfoByChain(uo.Owner, uo.Exec.ChainId.Uint64())
+	if ai == nil {
+		return true, nil
+	}
+	// balance
+	var balance big.Int
+	var balanceU256 *uint256.Int
+	balanceU256, err := p.state.GetTree().GetAccountBalance(uo.Sender)
+	if err != nil {
+		return false, err
+	}
+	balance.SetBytes(balanceU256.Bytes())
+	log.Infof("oldBalance: %d", &balance)
+
+	if uo.OperationType == 1 {
+		log.Infof("balance %d + operationValue %d", &balance, uo.OperationValue.Uint64())
+		balance.Add(&balance, uo.OperationValue.ToInt())
+	} else if uo.OperationType == 2 {
+		if balance.Cmp(uo.OperationValue.ToInt()) < 0 {
+			log.Errorf("current account balance %d is insufficient to withdraw %d",
+				&balance, uo.OperationValue.Uint64())
+			_ = p.db.UpdateOp(p.ctx, uo.OpId, "status", state.FailedStatus, nil)
+			return true, nil
+		}
+		log.Infof("balance %d - operationValue %d", &balance, uo.OperationValue.Uint64())
+		balance.Sub(&balance, uo.OperationValue.ToInt())
+	}
+
+	log.Infof("balance %d - CalculateGasUsed %s", &balance, uo.CalculateGasUsed())
+	balance.Sub(&balance, uo.CalculateGasUsed())
+
+	if _, err = p.state.GetTree().SetAccountBalance(uo.Sender.String(), &balance); err != nil {
+		return false, err
+	}
+	log.Infof("newBalance: %d", &balance)
+
+	// nonce
+	var nonce big.Int
+	nonceU256, err := p.state.GetTree().GetAccountNonce(uo.Sender, uo.Exec.ChainId.String())
+	if err != nil {
+		return false, err
+	}
+	nonce.SetBytes(nonceU256.Bytes())
+	log.Infof("phase first oldNonce: %d", &nonce)
+	nonce.Add(&nonce, big.NewInt(1))
+	log.Infof("phase first newNonce: %d", &nonce)
+	_, err = p.state.GetTree().SetAccountNonce(uo.Sender.String(), &nonce, uo.Exec.ChainId.String())
+	if err != nil {
+		return false, err
+	}
+	if uo.InnerExec.ChainId.Uint64() > 0 {
+		var nonce2 big.Int
+		nonceU256, err = p.state.GetTree().GetAccountNonce(uo.Sender, uo.InnerExec.ChainId.String())
+		if err != nil {
+			return false, err
+		}
+		nonce2.SetBytes(nonceU256.Bytes())
+		log.Infof("phase second oldNonce: %d", &nonce2)
+		nonce2.Add(&nonce2, big.NewInt(1))
+		log.Infof("phase second newNonce: %d", &nonce2)
+		_, err = p.state.GetTree().SetAccountNonce(uo.Sender.String(), &nonce2, uo.InnerExec.ChainId.String())
+		if err != nil {
+			return false, err
+		}
+	}
+	err = p.db.UpdateOp(p.ctx, uo.OpId, "batch_num", batchNum, dbTx)
+	if err != nil {
+		return false, err
+	}
+	err = p.db.UpdateOp(p.ctx, uo.OpId, "status", state.BatchStatus, dbTx)
+	if err != nil {
+		return false, err
+	}
+	return false, nil
+}
+
 func (p *Pool) verifyProof() error {
 	log.Info("verify proof...")
-	verifyBatch, err := p.db.GetLatestBatch(p.ctx, state.SuccessStatus, nil)
+	verifyBatch, err := p.db.GetBatchNoOp(p.ctx, state.SuccessStatus, nil)
 	if err != nil {
 		return err
 	}
@@ -195,7 +219,7 @@ func (p *Pool) verifyProof() error {
 	for _, v := range chainExtra {
 		extraInfo.ChainExtra = append(extraInfo.ChainExtra, v)
 	}
-	batches.AccInputHash = batchHashData(suo)
+	batches.AccInputHash = accInputData(suo)
 	batches.UserOperations = puo
 	tx, err := p.ethereum.UpdateEntryPointRoot(res.Proof, []EntryPoint.BaseStructBatchData{batches}, extraInfo)
 	if err != nil {

@@ -140,7 +140,7 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *SignedUserOperation) erro
 			log.Infof("deposit did: %s", suop.Did)
 		}
 	} else if suop.Did == "" {
-		hashBytes := crypto.Keccak256Hash(suop.Encode(true))
+		hashBytes := crypto.Keccak256Hash(suop.Encode(true, true))
 		suop.Did = hashBytes.Hex()
 		log.Infof("signedUserOperation did: %s", suop.Did)
 		suop.Status = PendingStatus

@@ -1,7 +1,6 @@
 package types
 
 import (
-	"github.com/OAB/lib/common/hexutil"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,7 +12,7 @@ type PoolInterface interface {
 }
 
 type StateInterface interface {
-	IsSupportChain(hexutil.Uint64) bool
+	IsSupportChain(uint64) bool
 	GetAccountInfo(common.Address, common.Address) (*state.AccountInfo, error)
 	GetAccountInfoByChain(common.Address, uint64) (*state.AccountInfo, error)
 	GetAccountOps(uid uint64) ([]*state.UserOperation, error)

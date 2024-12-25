@@ -91,19 +91,16 @@ func (p *Pool) CheckFlush(flag bool) {
 	}
 	if flag {
 		p.processBatch()
-		return
-	}
-	if p.cfg.FlushInterval != 0 {
-		if count >= p.cfg.MaxOps || time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.FlushInterval) {
-			p.processBatch()
-		}
 	} else if count >= p.cfg.MaxOps {
+		p.processBatch()
+		p.CheckFlush(false)
+	} else if p.cfg.FlushInterval > 0 && time.Since(p.lastFlushTime).Seconds() >= float64(p.cfg.FlushInterval) {
 		p.processBatch()
 	}
 }
 
 func (p *Pool) GetBatchProof() ([]*Batch, error) {
-	vb, err := p.db.GetLatestBatch(p.ctx, state.SuccessStatus, nil)
+	vb, err := p.db.GetBatchNoOp(p.ctx, state.SuccessStatus, nil)
 	if err != nil {
 		return nil, err
 	}

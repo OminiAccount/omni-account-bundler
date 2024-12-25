@@ -182,15 +182,16 @@ func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 		// Domain hash
 		domainSeparator, _ := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
 		log.Info("domainSeparator:", domainSeparator)
+		fmt.Println("domainSeparator:", domainSeparator)
 
 		// Primary type hash
 		primaryHash := typedData.TypeHash(typedData.PrimaryType)
-		log.Info("primaryHash:", primaryHash)
+		fmt.Println("primaryHash:", primaryHash)
 
 		// Message Data
 		encodedMessageData, _ := typedData.EncodeData(typedData.PrimaryType, typedData.Message, 1)
-		log.Info("encodedMessage:", encodedMessageData)
-		log.Info("encodedMessageHash:", crypto.Keccak256Hash(encodedMessageData))
+		fmt.Println("encodedMessage:", encodedMessageData)
+		fmt.Println("encodedMessageHash:", crypto.Keccak256Hash(encodedMessageData))
 
 	}
 
@@ -229,7 +230,7 @@ func (s *SignedUserOperation) RecoverAddress() common.Address {
 }
 
 // Encode Returns the bytes value of the EIP712 value + recover address
-func (s *SignedUserOperation) Encode(isPackOwner bool) []byte {
+func (s *SignedUserOperation) Encode(isPackOwner, isPackHasInner bool) []byte {
 	var encodeBytes []byte
 	encodeBytes = append(encodeBytes, s.PackOperation()...)
 	encodeBytes = append(encodeBytes, common.LeftPadBytes(s.Sender.Bytes(), 32)...)
@@ -240,7 +241,9 @@ func (s *SignedUserOperation) Encode(isPackOwner bool) []byte {
 		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.Exec.ZkVerificationGasLimit)), 32)...)
 		encodeBytes = append(encodeBytes, s.PackChainGasPrice(s.Exec)...)
 	}
-	encodeBytes = append(encodeBytes, []byte{s.HasInnerExec()}...)
+	if isPackHasInner {
+		encodeBytes = append(encodeBytes, []byte{s.HasInnerExec()}...)
+	}
 	if s.InnerExec.ChainId > 0 {
 		encodeBytes = append(encodeBytes, s.PackOpInfo(s.InnerExec)...)
 		encodeBytes = append(encodeBytes, crypto.Keccak256(s.InnerExec.CallData)...)
@@ -282,7 +285,7 @@ func EncodeEip712Context(sus []*SignedUserOperation) []byte {
 func HashSignedUserOperationV1s(sus []*SignedUserOperation) common.Hash {
 	var encodeBytes []byte
 	for _, su := range sus {
-		encodeBytes = append(encodeBytes, su.Encode(true)...)
+		encodeBytes = append(encodeBytes, su.Encode(true, true)...)
 	}
 
 	hashBytes, _ := poseidon2.HashMessage(encodeBytes)

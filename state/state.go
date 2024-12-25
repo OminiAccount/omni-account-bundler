@@ -43,6 +43,7 @@ func (s *State) Start() {
 	log.Info("state start")
 	go s.his.Start()
 	go func() {
+		return
 		testPrk := "82693fc767eb00e3288a01b7516f3a98269882e951be74403e4061d898ea0929"
 		testUser := common.HexToAddress("0x7c38C1646213255f62dB509688B8fA062e0Ed8e4")
 		var testAcc *common.Address
@@ -54,7 +55,7 @@ func (s *State) Start() {
 		}
 		for {
 			// deposit
-			time.Sleep(time.Minute * 3)
+			time.Sleep(time.Minute * 1)
 			log.Infof("add test deposit...")
 			accInfo, _ := s.GetAccountInfo(testUser, *testAcc)
 			suo := &SignedUserOperation{
@@ -158,7 +159,7 @@ func (s *State) Start() {
 			}
 			signature[crypto.RecoveryIDOffset] += 27
 			suo2.Signature = signature
-			hashBytes := crypto.Keccak256Hash(suo2.Encode(true))
+			hashBytes := crypto.Keccak256Hash(suo2.Encode(true, true))
 			suo2.Did = hashBytes.Hex()
 			dbTx, err = s.db.BeginDBTransaction(s.ctx)
 			if err != nil {
@@ -199,7 +200,7 @@ func (s *State) Stop() {
 	s.cancel()
 }
 
-func (s *State) IsSupportChain(nid hexutil.Uint64) bool {
+func (s *State) IsSupportChain(nid uint64) bool {
 	cli := s.ethereum.GetChainCli(chains.ChainId(nid))
 	if cli == nil {
 		return false

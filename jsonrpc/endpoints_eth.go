@@ -30,10 +30,11 @@ func (e *EthEndpoints) SendUserOperation(suop *state.SignedUserOperation) error 
 	if suop.Owner.Hex() == "0x" {
 		return fmt.Errorf("invalid owner")
 	}
-	if !e.state.IsSupportChain(suop.Exec.ChainId) {
+	if !e.state.IsSupportChain(suop.Exec.ChainId.Uint64()) {
 		return fmt.Errorf("chain:%d no support", suop.Exec.ChainId)
 	}
-	if suop.InnerExec.ChainId.Uint64() > 0 && !e.state.IsSupportChain(suop.InnerExec.ChainId) {
+	if suop.InnerExec.ChainId.Uint64() > 0 &&
+		!e.state.IsSupportChain(suop.InnerExec.ChainId.Uint64()) {
 		return fmt.Errorf("chain:%d no support", suop.InnerExec.ChainId)
 	}
 	ai, err := e.state.GetAccountInfo(suop.Owner, suop.Sender)
@@ -41,12 +42,12 @@ func (e *EthEndpoints) SendUserOperation(suop *state.SignedUserOperation) error 
 		return err
 	}
 	if _, ok := ai.Chain[suop.Exec.ChainId.Uint64()]; suop.Exec.ChainId.Uint64() > 0 && !ok {
-		go e.state.AddFailedCreateAA(ai.Uid, suop.Exec.ChainId.Uint64())
-		return fmt.Errorf("chain:%d does not exist this account:%s", suop.Exec.ChainId, suop.Sender)
+		go e.state.CreateOtherAccount(suop.Owner, ai.Salt, suop.Exec.ChainId.Uint64())
+		//return fmt.Errorf("chain:%d does not exist this account:%s", suop.Exec.ChainId, suop.Sender)
 	}
 	if _, ok := ai.Chain[suop.InnerExec.ChainId.Uint64()]; suop.InnerExec.ChainId.Uint64() > 0 && !ok {
-		go e.state.AddFailedCreateAA(ai.Uid, suop.InnerExec.ChainId.Uint64())
-		return fmt.Errorf("chain:%d does not exist this account:%s", suop.InnerExec.ChainId, suop.Sender)
+		go e.state.CreateOtherAccount(suop.Owner, ai.Salt, suop.InnerExec.ChainId.Uint64())
+		//return fmt.Errorf("chain:%d does not exist this account:%s", suop.InnerExec.ChainId, suop.Sender)
 	}
 	if suop.OperationType == state.DepositAction ||
 		suop.OperationType == state.WithdrawAction {
@@ -70,6 +71,9 @@ func (e *EthEndpoints) SetBatchProofResult(result pool.ProofResult) error {
 func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) interface{} {
 	if user.Hex() == "" || user.Hex() == "0x" || chainId < 1 {
 		return fmt.Errorf("params error")
+	}
+	if !e.state.IsSupportChain(chainId) {
+		return fmt.Errorf("chain:%d no support", chainId)
 	}
 	ai, err := e.state.GetAccountInfoByChain(user, chainId)
 	if err != nil {
@@ -124,7 +128,7 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 
 func (e *EthEndpoints) ReportHis(user, account common.Address, data state.AccountHistory) error {
 	accInfo := e.state.GetUser(user)
-	if accInfo == nil || accInfo.Uid < 1 {
+	if accInfo == nil || accInfo.Uid < 1 || accInfo.Account.Hex() != account.Hex() {
 		return fmt.Errorf("account not exist")
 	}
 	data.Uid = accInfo.Uid
@@ -140,7 +144,7 @@ func (e *EthEndpoints) ReportHis(user, account common.Address, data state.Accoun
 
 func (e *EthEndpoints) GetUserHistory(user, account common.Address, timestamp uint64) (interface{}, error) {
 	ai := e.state.GetUser(user)
-	if ai == nil || ai.Uid < 1 {
+	if ai == nil || ai.Uid < 1 || ai.Account.Hex() != account.Hex() {
 		return nil, fmt.Errorf("account not exist")
 	}
 	if timestamp < 1 {
