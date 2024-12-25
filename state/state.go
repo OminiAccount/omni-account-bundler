@@ -46,11 +46,11 @@ func (s *State) Start() {
 		testPrk := "82693fc767eb00e3288a01b7516f3a98269882e951be74403e4061d898ea0929"
 		testUser := common.HexToAddress("0x7c38C1646213255f62dB509688B8fA062e0Ed8e4")
 		var testAcc *common.Address
-		adr := s.GetAccountAdr(testUser)
+		adr := s.GetUser(testUser)
 		if adr != nil {
-			testAcc = adr
+			testAcc = &adr.Account
 		} else {
-			testAcc = s.CreateAccount(testUser)
+			testAcc = s.CreateVizingAccount(testUser)
 		}
 		for {
 			// deposit

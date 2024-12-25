@@ -93,7 +93,7 @@ func (p *PostgresStorage) GetChainSalt(ctx context.Context, nid uint64, dbTx pgx
 	e := p.getExecQuerier(dbTx)
 	var salt uint64
 	_ = e.QueryRow(ctx, getSQL, nid).Scan(&salt)
-	return salt + 2
+	return salt + 4
 }
 
 func (p *PostgresStorage) UpdateUserFailedSalt(ctx context.Context, user string, nid uint64, idDel bool, dbTx pgx.Tx) error {

@@ -271,21 +271,33 @@ func (s *State) GetSignedUserOp(user, account common.Address, did string, status
 	return &SignedUserOperation{UserOperation: op}, nil
 }
 
-func (s *State) GetAccountAdr(user common.Address) *common.Address {
-	adr, err := s.db.GetAccountAdr(s.ctx, user.Hex(), nil)
+func (s *State) GetUser(user common.Address) *AccountInfo {
+	ai, err := s.db.GetUser(s.ctx, user.Hex(), nil)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
-			log.Errorf("GetAccountAdr, user: %s, get user account adr err: %+v", user, err)
+			log.Errorf("GetUser, user: %s, get user err: %+v", user, err)
 		}
 		return nil
 	}
-	return adr
+	return ai
 }
 
 func (s *State) GetAccountInfo(user, account common.Address) (*AccountInfo, error) {
 	ai, err := s.db.GetUserInfoByAA(s.ctx, user.Hex(), account.Hex(), nil)
 	if err != nil {
 		log.Errorf("GetAccountInfoByAA, user: %s, acc: %s, get user info err: %+v", user, account, err)
+		return nil, err
+	}
+	return ai, nil
+}
+
+func (s *State) GetAccountInfoByChain(user common.Address, nid uint64) (*AccountInfo, error) {
+	ai, err := s.db.GetUserInfoByChain(s.ctx, user.Hex(), nid, nil)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		log.Errorf("GetAccountInfoByChain, user: %s, chainID: %d, get user info err: %+v", user, nid, err)
 		return nil, err
 	}
 	return ai, nil
@@ -300,8 +312,8 @@ func (s *State) GetAccountOps(uid uint64) ([]*UserOperation, error) {
 	return uos, nil
 }
 
-func (s *State) CreateAccount(user common.Address) *common.Address {
-	adr, salt, err := s.ethereum.CreateAccount(user)
+func (s *State) CreateVizingAccount(user common.Address) *common.Address {
+	adr, salt, err := s.ethereum.CreateVizingAccount(user)
 	if errors.Is(err, etherman.ErrExistAccount) {
 		return adr
 	}
@@ -319,6 +331,10 @@ func (s *State) CreateAccount(user common.Address) *common.Address {
 	}
 	log.Infof("[CreateAccount] add new account success %s", adr)
 	return adr
+}
+
+func (s *State) CreateOtherAccount(user common.Address, salt, nid uint64) error {
+	return s.ethereum.CreateOtherAccount(user, salt, nid)
 }
 
 func (s *State) AddFailedCreateAA(uid, nid uint64) {

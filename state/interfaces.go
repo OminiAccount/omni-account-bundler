@@ -15,6 +15,7 @@ type (
 		GetChainCli(c chains.ChainId) *etherman.EthereumClient
 		EstimateGas(uint64, *big.Int, []SyncRouter.BaseStructPackedUserOperation) (*big.Int, error)
 		UpdateEntryPointRoot(hexutil.Bytes, []EntryPoint.BaseStructBatchData, EntryPoint.BaseStructChainsExecuteInfo) (common.Hash, error)
-		CreateAccount(common.Address) (*common.Address, uint64, error)
+		CreateVizingAccount(common.Address) (*common.Address, uint64, error)
+		CreateOtherAccount(common.Address, uint64, uint64) error
 	}
 )

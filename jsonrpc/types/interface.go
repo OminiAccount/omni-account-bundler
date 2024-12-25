@@ -15,10 +15,12 @@ type PoolInterface interface {
 type StateInterface interface {
 	IsSupportChain(hexutil.Uint64) bool
 	GetAccountInfo(common.Address, common.Address) (*state.AccountInfo, error)
+	GetAccountInfoByChain(common.Address, uint64) (*state.AccountInfo, error)
 	GetAccountOps(uid uint64) ([]*state.UserOperation, error)
-	GetAccountAdr(common.Address) *common.Address
+	GetUser(user common.Address) *state.AccountInfo
 	AddSignedUserOp(*state.AccountInfo, *state.SignedUserOperation) error
-	CreateAccount(common.Address) *common.Address
+	CreateVizingAccount(common.Address) *common.Address
+	CreateOtherAccount(common.Address, uint64, uint64) error
 	AddFailedCreateAA(uint64, uint64)
 }
 

@@ -3,6 +3,7 @@ package etherman
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SyncRouter"
 	"github.com/OAB/lib/common/hexutil"
@@ -127,11 +128,12 @@ func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []Entry
 	return tx.Hash(), nil
 }
 
-func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint64, error) {
+func (ether *EtherMan) CreateVizingAccount(user common.Address) (*common.Address, uint64, error) {
 	ccli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
 	ccli.lock.Lock()
 	defer ccli.lock.Unlock()
-	if u, ok := tempUser.Load(user.Hex()); ok {
+	lockKey := fmt.Sprintf("%s-%d", user.Hex(), ether.cfg.VizingNetwork.ChainId)
+	if u, ok := tempUser.Load(lockKey); ok {
 		lu := u.(lockUser)
 		return &lu.adr, lu.salt, ErrExistAccount
 	}
@@ -175,14 +177,18 @@ func (ether *EtherMan) CreateAccount(user common.Address) (*common.Address, uint
 	salt2 := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), nil)
 	log.Infof("check add salt: %d", ccli.chainID, salt2)
 	log.Infof("==============================")
-	for _, cli := range ether.chainsClient {
+	/*for _, cli := range ether.chainsClient {
 		if cli.chainID == ether.cfg.VizingNetwork.ChainId {
 			continue
 		}
 		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
-	}
-	tempUser.Store(user.Hex(), lockUser{adr, salt, time.Now()})
+	}*/
+	tempUser.Store(lockKey, lockUser{adr, salt, time.Now()})
 	return &adr, salt, nil
+}
+
+func (ether *EtherMan) CreateOtherAccount(user common.Address, salt, nid uint64) error {
+	return ether.pendingCreateAA(PendingData{chains.ChainId(nid), user, salt})
 }
 
 type PendingData struct {
@@ -191,7 +197,7 @@ type PendingData struct {
 	Salt    uint64
 }
 
-func (ether *EtherMan) pendingCreateAA(pd PendingData) {
+func (ether *EtherMan) pendingCreateAA(pd PendingData) error {
 	c := ether.chainsClient[pd.ChainID]
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -203,10 +209,11 @@ func (ether *EtherMan) pendingCreateAA(pd PendingData) {
 	if err != nil {
 		log.Errorf("chain: %d, user: %s, create account err: %+v", c.chainID, pd.User, err)
 		ether.saveFailedCreateAA(pd, false)
-		return
+		return err
 	}
 	ether.saveFailedCreateAA(pd, true)
 	log.Infof("create account success, chain: %d, user: %s, tx: %s", c.chainID, pd.User, tx.Hash())
+	return nil
 }
 
 func (ether *EtherMan) saveFailedCreateAA(pd PendingData, isDel bool) {
@@ -224,7 +231,7 @@ func (ether *EtherMan) Start() {
 			case <-ticker.C:
 				tempUser.Range(func(key, value any) bool {
 					lu := value.(lockUser)
-					if time.Since(lu.timeAt) > time.Minute*10 {
+					if time.Since(lu.timeAt) > time.Minute {
 						tempUser.Delete(key)
 					}
 					return true
@@ -257,7 +264,7 @@ func (ether *EtherMan) Start() {
 							ether.saveFailedCreateAA(pd, true)
 							continue
 						}
-						ether.pendingCreateAA(pd)
+						_ = ether.pendingCreateAA(pd)
 					}
 				}
 			case <-ether.ctx.Done():

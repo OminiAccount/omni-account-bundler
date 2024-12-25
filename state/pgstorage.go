@@ -105,7 +105,8 @@ func (p *PostgresStorage) ModUserInfo(ctx context.Context, uid, nid, nonce uint6
 }
 
 func (p *PostgresStorage) AddUser(ctx context.Context, am AccountMapping, dbTx pgx.Tx) error {
-	addSQL := "INSERT INTO omni.user (owner, account, salt, failed_salt, create_at, update_at) VALUES ($1, $2, $3, $4, $5, $6);"
+	addSQL := "INSERT INTO omni.user (owner, account, salt, failed_salt, create_at, update_at) " +
+		"VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (owner) DO NOTHING;"
 	e := p.getExecQuerier(dbTx)
 	_, err := e.Exec(ctx, addSQL, strings.ToLower(am.User.Hex()),
 		strings.ToLower(am.Account.Hex()), am.Salt, "", time.Now(), time.Now())
@@ -121,16 +122,9 @@ func (p *PostgresStorage) AddUserInfo(ctx context.Context, uid, nid uint64, dbTx
 
 func (p *PostgresStorage) GetUserInfoByAA(ctx context.Context, owner, account string, dbTx pgx.Tx) (*AccountInfo, error) {
 	getSQL := `
-		SELECT
-			u.id, u.salt, ui.network_id, ui.nonce, ui.gas
-		FROM
-			omni.user u
-		LEFT JOIN
-			omni.user_info ui
-		ON
-			u.id = ui.user_id
-		WHERE
-			u.owner = $1 AND u.account = $2;
+		SELECT u.id,u.owner,u.account,u.salt,ui.network_id,ui.nonce,ui.gas
+		FROM omni.user u LEFT JOIN omni.user_info ui ON u.id = ui.user_id
+		WHERE u.owner = $1 AND u.account = $2;
 	`
 	e := p.getExecQuerier(dbTx)
 	rows, err := e.Query(ctx, getSQL, strings.ToLower(owner), strings.ToLower(account))
@@ -138,58 +132,93 @@ func (p *PostgresStorage) GetUserInfoByAA(ctx context.Context, owner, account st
 		return nil, err
 	}
 	defer rows.Close()
-	ai := &AccountInfo{
-		User:    common.HexToAddress(owner),
-		Account: common.HexToAddress(account),
-		Chain:   map[uint64]ChainInfo{},
-	}
-	var (
-		tid   uint64
-		salt  uint64
-		nid   sql.NullInt32
-		nonce sql.NullInt64
-		gas   sql.NullString
-	)
 	for rows.Next() {
-		err := rows.Scan(&tid, &salt, &nid, &nonce, &gas)
+		ai, err := scanUser(rows)
 		if err != nil {
 			return nil, err
 		}
-		if nid.Valid {
-			ci := ChainInfo{
-				NetworkID: uint64(nid.Int32),
-			}
-			if nonce.Valid {
-				ci.Nonce = uint64(nonce.Int64)
-			}
-			if gas.Valid {
-				ci.Gas = hex.DecodeBig(gas.String)
-			}
-			ai.Chain[uint64(nid.Int32)] = ci
-		}
+		return ai, nil
 	}
-	ai.Uid = tid
-	ai.Salt = salt
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 	//log.Infof("%+v", ai)
-	return ai, nil
+	return nil, pgx.ErrNoRows
 }
 
-func (p *PostgresStorage) GetAccountAdr(ctx context.Context, owner string, dbTx pgx.Tx) (*common.Address, error) {
-	const getSQL = `SELECT account FROM	omni.user WHERE owner = $1 ORDER BY id ASC LIMIT 1;`
-	e := p.getExecQuerier(dbTx)
-	var adr string
-	err := e.QueryRow(ctx, getSQL, strings.ToLower(owner)).Scan(&adr)
+func scanUser(row pgx.Row) (*AccountInfo, error) {
+	ai := &AccountInfo{Chain: map[uint64]ChainInfo{}}
+	var tid, salt uint64
+	var ownerStr, accStr string
+	var (
+		nid   sql.NullInt32
+		nonce sql.NullInt64
+		gas   sql.NullString
+	)
+	err := row.Scan(&tid, &ownerStr, &accStr, &salt, &nid, &nonce, &gas)
 	if err != nil {
 		return nil, err
 	}
-	if adr == "" {
+	if nid.Valid {
+		ci := ChainInfo{
+			NetworkID: uint64(nid.Int32),
+		}
+		if nonce.Valid {
+			ci.Nonce = uint64(nonce.Int64)
+		}
+		if gas.Valid {
+			ci.Gas = hex.DecodeBig(gas.String)
+		}
+		ai.Chain[uint64(nid.Int32)] = ci
+	}
+	ai.User = common.HexToAddress(ownerStr)
+	ai.Account = common.HexToAddress(accStr)
+	ai.Uid = tid
+	ai.Salt = salt
+	return ai, nil
+}
+
+func (p *PostgresStorage) GetUserInfoByChain(ctx context.Context, owner string, nid uint64, dbTx pgx.Tx) (*AccountInfo, error) {
+	getSQL := `
+		SELECT u.id,u.owner,u.account,u.salt,ui.network_id,ui.nonce,ui.gas
+		FROM omni.user u LEFT JOIN omni.user_info ui ON u.id = ui.user_id
+		WHERE u.owner = $1 AND ui.network_id = $2;
+	`
+	e := p.getExecQuerier(dbTx)
+	rows, err := e.Query(ctx, getSQL, strings.ToLower(owner), nid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		ai, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		return ai, nil
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	//log.Infof("%+v", ai)
+	return nil, nil
+}
+
+func (p *PostgresStorage) GetUser(ctx context.Context, owner string, dbTx pgx.Tx) (*AccountInfo, error) {
+	const getSQL = `SELECT id,owner,account,salt FROM omni.user WHERE owner = $1 ORDER BY id ASC LIMIT 1;`
+	e := p.getExecQuerier(dbTx)
+	var ai AccountInfo
+	var ownerStr, accStr string
+	err := e.QueryRow(ctx, getSQL, strings.ToLower(owner)).Scan(&ai.Uid, &ownerStr, &accStr, &ai.Salt)
+	if err != nil {
+		return nil, err
+	}
+	if ai.Uid < 1 {
 		return nil, ErrStorageNotFound
 	}
-	acc := common.HexToAddress(adr)
-	return &acc, nil
+	ai.User = common.HexToAddress(ownerStr)
+	ai.Account = common.HexToAddress(accStr)
+	return &ai, nil
 }
 
 func (p *PostgresStorage) GetUserOps(ctx context.Context, uid uint64, dbTx pgx.Tx) ([]*UserOperation, error) {

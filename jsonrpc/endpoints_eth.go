@@ -71,15 +71,30 @@ func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) in
 	if user.Hex() == "" || user.Hex() == "0x" || chainId < 1 {
 		return fmt.Errorf("params error")
 	}
-	adr := e.state.GetAccountAdr(user)
-	if adr != nil {
-		return adr
+	ai, err := e.state.GetAccountInfoByChain(user, chainId)
+	if err != nil {
+		return err
 	}
-	return e.state.CreateAccount(user)
+	if ai == nil {
+		u := e.state.GetUser(user)
+		if u == nil || u.Uid < 0 {
+			_ = e.state.CreateVizingAccount(user)
+			u = e.state.GetUser(user)
+		}
+		_ = e.state.CreateOtherAccount(user, u.Salt, chainId)
+		return u.Account
+	} else if _, ok := ai.Chain[chainId]; ok {
+		return &ai.Account
+	}
+	return nil
 }
 
 func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
-	return e.state.GetAccountAdr(user)
+	ai := e.state.GetUser(user)
+	if ai == nil || ai.Uid < 0 {
+		return e.state.CreateVizingAccount(user)
+	}
+	return ai.Account
 }
 
 func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint64) (interface{}, error) {
@@ -108,9 +123,9 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 }
 
 func (e *EthEndpoints) ReportHis(user, account common.Address, data state.AccountHistory) error {
-	accInfo, err := e.state.GetAccountInfo(user, account)
-	if err != nil {
-		return err
+	accInfo := e.state.GetUser(user)
+	if accInfo == nil || accInfo.Uid < 1 {
+		return fmt.Errorf("account not exist")
 	}
 	data.Uid = accInfo.Uid
 	if data.HisTime < 1 {
@@ -124,11 +139,8 @@ func (e *EthEndpoints) ReportHis(user, account common.Address, data state.Accoun
 }
 
 func (e *EthEndpoints) GetUserHistory(user, account common.Address, timestamp uint64) (interface{}, error) {
-	ai, err := e.state.GetAccountInfo(user, account)
-	if err != nil {
-		return nil, err
-	}
-	if ai.Uid < 1 {
+	ai := e.state.GetUser(user)
+	if ai == nil || ai.Uid < 1 {
 		return nil, fmt.Errorf("account not exist")
 	}
 	if timestamp < 1 {

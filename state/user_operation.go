@@ -125,6 +125,14 @@ func (u *UserOperation) PackOperation() []byte {
 	return encodeBytes
 }
 
+func (u *UserOperation) HasInnerExec() byte {
+	if u.InnerExec.ChainId.Uint64() < 1 {
+		return 0
+	} else {
+		return 1
+	}
+}
+
 func (u *UserOperation) CalculateEIP712TypeDataHash() []byte {
 	domain := apitypes.TypedDataDomain{
 		Name:    EIP712DomainName,
@@ -232,6 +240,7 @@ func (s *SignedUserOperation) Encode(isPackOwner bool) []byte {
 		encodeBytes = append(encodeBytes, common.LeftPadBytes(packutils.Uint64ToBytes(uint64(s.Exec.ZkVerificationGasLimit)), 32)...)
 		encodeBytes = append(encodeBytes, s.PackChainGasPrice(s.Exec)...)
 	}
+	encodeBytes = append(encodeBytes, []byte{s.HasInnerExec()}...)
 	if s.InnerExec.ChainId > 0 {
 		encodeBytes = append(encodeBytes, s.PackOpInfo(s.InnerExec)...)
 		encodeBytes = append(encodeBytes, crypto.Keccak256(s.InnerExec.CallData)...)
