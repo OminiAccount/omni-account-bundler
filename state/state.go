@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/merkletree"
@@ -131,7 +130,7 @@ func (s *State) Start() {
 					Uid:            accInfo.Uid,
 					Owner:          testUser,
 					OperationType:  WithdrawAction,
-					OperationValue: (*hexutil.Big)(big.NewInt(2000000000000000)),
+					OperationValue: (*hexutil.Big)(big.NewInt(100000000000000)),
 					Sender:         *testAcc,
 					Exec: ExecData{
 						ChainId:                28516,
@@ -186,6 +185,7 @@ func (s *State) Start() {
 				log.Errorf("%+v, add op err: %+v", suo2.UserOperation, err)
 				return
 			}
+			s.createUserHis(suo2.UserOperation)
 			err = dbTx.Commit(s.ctx)
 			if err != nil {
 				log.Errorf("%+v, add op commit err: %+v", suo2.UserOperation, err)
@@ -201,7 +201,7 @@ func (s *State) Stop() {
 }
 
 func (s *State) IsSupportChain(nid uint64) bool {
-	cli := s.ethereum.GetChainCli(chains.ChainId(nid))
+	cli := s.ethereum.GetChainCli(nid)
 	if cli == nil {
 		return false
 	}

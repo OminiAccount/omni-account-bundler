@@ -283,15 +283,15 @@ func scanOperation(row pgx.Row) (*UserOperation, error) {
 	return op, nil
 }
 
-func (p *PostgresStorage) GetSigleUserOp(ctx context.Context, owner, account,
+func (p *PostgresStorage) GetSigleUserOp(ctx context.Context, account,
 	did string, status int, dbTx pgx.Tx) (*UserOperation, error) {
 	const getSQL = `
 		SELECT o.* FROM omni.user u 
 		LEFT JOIN omni.operation o ON o.user_id = u.id 
-		WHERE u.owner = $1 AND u.account = $2 AND o.did = $3 AND o.status = $4 LIMIT 1;
+		WHERE u.account = $1 AND o.did = $2 AND o.status = $3 LIMIT 1;
 	`
 	e := p.getExecQuerier(dbTx)
-	row := e.QueryRow(ctx, getSQL, strings.ToLower(owner), strings.ToLower(account), did, status)
+	row := e.QueryRow(ctx, getSQL, strings.ToLower(account), did, status)
 	uo, err := scanOperation(row)
 	log.Infof("%+v", uo)
 	return uo, err

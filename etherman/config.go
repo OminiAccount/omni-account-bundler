@@ -1,7 +1,6 @@
 package etherman
 
 import (
-	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -23,12 +22,14 @@ type KeystoreFileConfig struct {
 
 // Network configures the network's chainId, rpc and contract's address
 type Network struct {
-	ChainId        chains.ChainId     `mapstructure:"chain-id"`
+	ChainId        uint64             `mapstructure:"chain-id"`
 	Rpc            string             `mapstructure:"rpc"`
 	EntryPoint     common.Address     `mapstructure:"entry-point"`
 	AccountFactory common.Address     `mapstructure:"account-factory"`
 	SyncRouter     common.Address     `mapstructure:"sync-router"`
+	DataHelp       common.Address     `mapstructure:"data-help"`
 	PrivateKeys    KeystoreFileConfig `mapstructure:"private_keys"`
 	GenBlockNumber uint64             `mapstructure:"gen-block"`
 	IsSync         uint8              `mapstructure:"is-sync"`
+	BlockCheckNum  uint64             `mapstructure:"block-check-num"`
 }

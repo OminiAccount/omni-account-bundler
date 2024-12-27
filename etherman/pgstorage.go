@@ -89,11 +89,11 @@ func (p *PostgresStorage) SetChain(ctx context.Context, nid, val uint64, col str
 }
 
 func (p *PostgresStorage) GetChainSalt(ctx context.Context, nid uint64, dbTx pgx.Tx) uint64 {
-	getSQL := `SELECT salt FROM omni.chain_height where network_id = $1 FOR UPDATE;`
+	getSQL := `SELECT salt FROM omni.chain_height where network_id = $1;`
 	e := p.getExecQuerier(dbTx)
 	var salt uint64
 	_ = e.QueryRow(ctx, getSQL, nid).Scan(&salt)
-	return salt + 6
+	return salt
 }
 
 func (p *PostgresStorage) UpdateUserFailedSalt(ctx context.Context, user string, nid uint64, idDel bool, dbTx pgx.Tx) error {

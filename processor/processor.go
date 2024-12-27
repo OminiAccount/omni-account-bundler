@@ -57,6 +57,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	}
 	log.Info("Ethereum successfully initialized")
 
+	cfg.State.VizingChainID = cfg.Ethereum.VizingNetwork.ChainId
 	st, err := state.NewState(ctx, cfg.State, tree, ethereum, storage)
 	if err != nil {
 		return nil, err

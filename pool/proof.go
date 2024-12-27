@@ -47,7 +47,8 @@ func (p *Pool) processBatch() {
 			return
 		}
 		if isR {
-			list = append(list[:i], list[i+1:]...)
+			_ = i
+			//list = append(list[:i], list[i+1:]...)
 		}
 	}
 	// Set BatchL2Data and BatchHashData
@@ -75,12 +76,12 @@ func (p *Pool) calculateOp(batchNum uint64, uo *state.SignedUserOperation, dbTx 
 		}
 		return false, nil
 	}
-	uoOwner := uo.RecoverAddress()
+	/*uoOwner := uo.RecoverAddress()
 	if uoOwner.Hex() != uo.Owner.Hex() {
 		log.Errorf("recover address(%s) != owner(%s)", uoOwner.Hex(), uo.Owner.Hex())
 		_ = p.db.UpdateOp(p.ctx, uo.OpId, "status", state.FailedStatus, nil)
 		return true, nil
-	}
+	}*/
 	ai, _ := p.state.GetAccountInfoByChain(uo.Owner, uo.Exec.ChainId.Uint64())
 	if ai == nil {
 		return true, nil
@@ -167,9 +168,10 @@ func (p *Pool) verifyProof() error {
 	if err != nil {
 		return err
 	}
-	batches := EntryPoint.BaseStructBatchData{}
+	allOp := []*state.SignedUserOperation{}
+	batches := []EntryPoint.BaseStructBatchData{}
 	extraInfo := EntryPoint.BaseStructChainsExecuteInfo{}
-	var suo []*state.SignedUserOperation
+	chainExtra := make(map[uint64]EntryPoint.BaseStructChainExecuteExtra)
 	for i := res.Number; i <= res.FinalNumber; i++ {
 		if i <= verifyBatch.NewNumBatch {
 			return fmt.Errorf("batch number too low")
@@ -184,44 +186,47 @@ func (p *Pool) verifyProof() error {
 		if i == res.FinalNumber {
 			extraInfo.NewStateRoot = batch[0].NewStateRoot
 		}
-		suo = append(suo, batch[0].BatchL2SrcData...)
+		suo := batch[0].BatchL2SrcData
+		var puo []EntryPoint.BaseStructPackedUserOperation
+		for _, op := range suo {
+			puo = append(puo, op.ToEntryPointOp())
+			chainID := op.Exec.ChainId
+			if op.Phase == state.PhaseSecond {
+				chainID = op.InnerExec.ChainId
+			}
+			fee, err := p.ethereum.EstimateGas(chainID.Uint64(), op.CalculateGasUsed(),
+				[]SyncRouter.BaseStructPackedUserOperation{op.ToSyncRouterOp()})
+			if err != nil {
+				return err
+			}
+			log.Infof("EstimateGas fee: %d", fee.Uint64())
+			if cee, ok := chainExtra[chainID.Uint64()]; ok {
+				cee.ChainFee += fee.Uint64()
+				cee.ChainUserOperationsNumber++
+				chainExtra[chainID.Uint64()] = cee
+			} else {
+				chainExtra[chainID.Uint64()] = EntryPoint.BaseStructChainExecuteExtra{
+					ChainId:                   chainID.Uint64(),
+					ChainFee:                  fee.Uint64(),
+					ChainUserOperationsNumber: 1,
+				}
+			}
+		}
+		batches = append(batches, EntryPoint.BaseStructBatchData{
+			UserOperations: puo,
+			AccInputHash:   batch[0].NewAccInputHash,
+		})
+		allOp = append(allOp, suo...)
 	}
-	if len(suo) < 1 {
+	if len(batches) < 1 {
 		log.Warnf("batch(%d - %d) no data", res.Number, res.FinalNumber)
 		err = p.db.DelProof(p.ctx, res.Number, res.FinalNumber, nil)
 		return err
 	}
-	var puo []EntryPoint.BaseStructPackedUserOperation
-	chainExtra := make(map[uint64]EntryPoint.BaseStructChainExecuteExtra)
-	for _, op := range suo {
-		puo = append(puo, op.ToEntryPointOp())
-		chainID := op.Exec.ChainId
-		if op.Phase == state.PhaseSecond {
-			chainID = op.InnerExec.ChainId
-		}
-		fee, err := p.ethereum.EstimateGas(chainID.Uint64(), op.CalculateGasUsed(),
-			[]SyncRouter.BaseStructPackedUserOperation{op.ToSyncRouterOp()})
-		if err != nil {
-			return err
-		}
-		log.Infof("EstimateGas fee: %d", fee.Uint64())
-		if cee, ok := chainExtra[chainID.Uint64()]; ok {
-			cee.ChainFee += fee.Uint64()
-			cee.ChainUserOperationsNumber++
-			chainExtra[chainID.Uint64()] = cee
-		} else {
-			chainExtra[chainID.Uint64()] = EntryPoint.BaseStructChainExecuteExtra{
-				ChainFee:                  fee.Uint64(),
-				ChainUserOperationsNumber: 1,
-			}
-		}
-	}
 	for _, v := range chainExtra {
 		extraInfo.ChainExtra = append(extraInfo.ChainExtra, v)
 	}
-	batches.AccInputHash = accInputData(suo)
-	batches.UserOperations = puo
-	tx, err := p.ethereum.UpdateEntryPointRoot(res.Proof, []EntryPoint.BaseStructBatchData{batches}, extraInfo)
+	tx, err := p.ethereum.UpdateEntryPointRoot(res.Proof, batches, extraInfo)
 	if err != nil {
 		return err
 	}
@@ -246,7 +251,7 @@ func (p *Pool) verifyProof() error {
 		}
 	}
 	log.Infof("update user op and history")
-	for _, op := range suo {
+	for _, op := range allOp {
 		err = p.db.UpdateOp(p.ctx, op.OpId, "status", state.SuccessStatus, dbTx)
 		if err != nil {
 			_ = dbTx.Rollback(p.ctx)
@@ -269,12 +274,24 @@ func (p *Pool) verifyProof() error {
 			}
 			continue
 		}
-		uoHis := state.ToUserOperationHis(tx.Hex(), op.UserOperation)
+		err = p.state.GetHisIns().UpdateAccountHis(op.Uid, op.Did,
+			map[string]interface{}{
+				"source_hash": tx.Hex(),
+				"target_hash": tx.Hex(),
+				"status":      state.CheckFromTxStatus,
+			},
+		)
+		if err != nil {
+			_ = dbTx.Rollback(p.ctx)
+			log.Errorf("UpdateAccountHis err: %+v", err)
+			return err
+		}
+		/*uoHis := state.ToUserOperationHis(tx.Hex(), op.UserOperation)
 		err = p.state.GetHisIns().SaveAccountHis(&uoHis)
 		if err != nil {
 			log.Errorf("add account(%s, %s) history error: %v", op.Owner, op.Sender, err)
 			continue
-		}
+		}*/
 	}
 	err = dbTx.Commit(p.ctx)
 	return err

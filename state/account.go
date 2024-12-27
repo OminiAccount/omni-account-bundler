@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OAB/etherman"
-	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/hex"
 	"github.com/OAB/utils/log"
 	"github.com/OAB/utils/packutils"
@@ -111,13 +110,13 @@ func ToUserOperationHis(tx string, op *UserOperation) AccountHistory {
 	return uoHis
 }
 
-func (s *State) CreateAccountInfo(chainID chains.ChainId, am AccountMapping) {
+func (s *State) CreateAccountInfo(chainID uint64, am AccountMapping) {
 	ui, err := s.db.GetUserInfoByAA(s.ctx, am.User.Hex(), am.Account.Hex(), nil)
 	if err != nil {
 		log.Errorf("[CreateAccountInfo] chainID: %d, user: %+v, err: %+v", chainID, am, err)
 		return
 	}
-	err = s.db.AddUserInfo(s.ctx, ui.Uid, uint64(chainID), nil)
+	err = s.db.AddUserInfo(s.ctx, ui.Uid, chainID, nil)
 	if err != nil {
 		log.Errorf("[CreateAccountInfo] chainID: %d, user: %+v, err: %+v", chainID, am, err)
 		return
@@ -214,7 +213,33 @@ func (s *State) AddSignedUserOp(ai *AccountInfo, suop *SignedUserOperation) erro
 		return err
 	}
 	err = dbTx.Commit(s.ctx)
+	if suop.OperationType != DepositAction {
+		go s.createUserHis(suop.UserOperation)
+	}
 	return err
+}
+
+func (s *State) createUserHis(op *UserOperation) {
+	uoHis := ToUserOperationHis("", op)
+	switch op.OperationType {
+	case SwapCrossAction, SwapAction:
+		decodeParams, err := s.ethereum.DecodeSwapCalldata(uoHis.SourceChain, op.Exec.CallData)
+		if err != nil {
+			log.Errorf("decode calldata: %+v, error: %v", op, err)
+			return
+		}
+		uoHis.From.Address = decodeParams.Sender.Hex()
+		uoHis.From.Value = hex.EncodeBig(decodeParams.AmountIn)
+		uoHis.From.Token.Address = decodeParams.TokenIn.Hex()
+		uoHis.To.Address = decodeParams.Receiver.Hex()
+		uoHis.To.Value = ""
+		uoHis.To.Token.Address = decodeParams.TokenOut.Hex()
+	case TrueMarketBuy, TrueMarketSell:
+	}
+	err := s.his.SaveAccountHis(&uoHis)
+	if err != nil {
+		log.Errorf("add account(%s, %s) history error: %v", op.Owner, op.Sender, err)
+	}
 }
 
 func (s *State) AddAccountGas(suop *SignedUserOperation, dbTx pgx.Tx) error {
@@ -264,7 +289,7 @@ func (s *State) UpdateUserOpPhase(opid uint64, phase int, dbTx pgx.Tx) error {
 }
 
 func (s *State) GetSignedUserOp(user, account common.Address, did string, status int) (*SignedUserOperation, error) {
-	op, err := s.db.GetSigleUserOp(s.ctx, user.Hex(), account.Hex(), did, status, nil)
+	op, err := s.db.GetSigleUserOp(s.ctx, account.Hex(), did, status, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -313,28 +338,40 @@ func (s *State) GetAccountOps(uid uint64) ([]*UserOperation, error) {
 }
 
 func (s *State) CreateVizingAccount(user common.Address) *common.Address {
-	adr, salt, err := s.ethereum.CreateVizingAccount(user)
-	if errors.Is(err, etherman.ErrExistAccount) {
+	adr, salt, err1 := s.ethereum.CreateVizingAccount(user)
+	if errors.Is(err1, etherman.ErrExistAccount) {
 		return adr
 	}
 	if adr == nil {
 		return nil
 	}
 	log.Infof("user: %s, account: %s, salt: %d", user, adr, salt)
-	err = s.db.AddUser(s.ctx, AccountMapping{
+	err2 := s.db.AddUser(s.ctx, AccountMapping{
 		User:    user,
 		Account: *adr,
 		Salt:    salt,
 	}, nil)
-	if err != nil {
-		log.Errorf("Add a new account mapping err: %+v", err)
+	if err2 != nil {
+		log.Errorf("Add a new account mapping err: %+v", err2)
+	}
+	if errors.Is(err1, etherman.ErrAlreadyCreateAA) {
+		s.CreateAccountInfo(s.cfg.VizingChainID, AccountMapping{
+			User:    user,
+			Account: *adr,
+		})
 	}
 	log.Infof("[CreateAccount] add new account success %s", adr)
 	return adr
 }
 
-func (s *State) CreateOtherAccount(user common.Address, salt, nid uint64) error {
-	return s.ethereum.CreateOtherAccount(user, salt, nid)
+func (s *State) CreateOtherAccount(user common.Address, salt, nid uint64) {
+	acc, err := s.ethereum.CreateOtherAccount(user, salt, nid)
+	if errors.Is(err, etherman.ErrAlreadyCreateAA) {
+		s.CreateAccountInfo(nid, AccountMapping{
+			User:    user,
+			Account: *acc,
+		})
+	}
 }
 
 func (s *State) AddFailedCreateAA(uid, nid uint64) {

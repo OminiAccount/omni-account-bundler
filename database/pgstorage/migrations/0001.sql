@@ -13,7 +13,8 @@ CREATE TABLE omni.user
     failed_salt VARCHAR,
     create_at   TIMESTAMP WITH TIME ZONE NOT NULL,
     update_at   TIMESTAMP WITH TIME ZONE NOT NULL,
-    CONSTRAINT user_unique UNIQUE (owner)
+    CONSTRAINT user_unique UNIQUE (owner),
+    CONSTRAINT acc_unique UNIQUE (account)
 );
 
 CREATE TABLE omni.user_info
@@ -48,7 +49,9 @@ CREATE TABLE omni.proof
     proof           VARCHAR,
     public_values   VARCHAR,
     create_at       TIMESTAMP WITH TIME ZONE NOT NULL,
-    update_at       TIMESTAMP WITH TIME ZONE NOT NULL
+    update_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT batch_unique UNIQUE (batch_num),
+    CONSTRAINT fbatch_unique UNIQUE (final_batch_num)
 );
 
 CREATE TABLE omni.operation
@@ -108,7 +111,8 @@ CREATE TABLE omni.history (
     swap_hash     VARCHAR,
     status        INTEGER,
     create_at     TIMESTAMP WITH TIME ZONE NOT NULL,
-    update_at     TIMESTAMP WITH TIME ZONE NOT NULL
+    update_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT did_unique UNIQUE (did)
 );
 
 CREATE TABLE omni.hash_db (

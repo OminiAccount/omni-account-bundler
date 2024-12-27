@@ -85,7 +85,10 @@ func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) in
 			_ = e.state.CreateVizingAccount(user)
 			u = e.state.GetUser(user)
 		}
-		_ = e.state.CreateOtherAccount(user, u.Salt, chainId)
+		if u == nil {
+			return fmt.Errorf("create account failed")
+		}
+		go e.state.CreateOtherAccount(user, u.Salt, chainId)
 		return u.Account
 	} else if _, ok := ai.Chain[chainId]; ok {
 		return &ai.Account

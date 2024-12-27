@@ -19,7 +19,7 @@ type StateInterface interface {
 	GetUser(user common.Address) *state.AccountInfo
 	AddSignedUserOp(*state.AccountInfo, *state.SignedUserOperation) error
 	CreateVizingAccount(common.Address) *common.Address
-	CreateOtherAccount(common.Address, uint64, uint64) error
+	CreateOtherAccount(common.Address, uint64, uint64)
 	AddFailedCreateAA(uint64, uint64)
 }
 

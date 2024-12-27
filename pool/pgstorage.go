@@ -81,8 +81,8 @@ func (p *PostgresStorage) GetEarliestProof(ctx context.Context, dbTx pgx.Tx) (*P
 	if err != nil {
 		return nil, err
 	}
-	pr.Proof = common.Hex2Bytes(proofStr)
-	pr.PublicValues = common.Hex2Bytes(valuesStr)
+	pr.Proof = common.Hex2Bytes(strings.TrimPrefix(proofStr, "0x"))
+	pr.PublicValues = common.Hex2Bytes(strings.TrimPrefix(valuesStr, "0x"))
 	return &pr, nil
 }
 
@@ -148,9 +148,11 @@ func (p *PostgresStorage) GetBatchNoOp(ctx context.Context, status uint64, dbTx 
 func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, dbTx pgx.Tx) ([]*Batch, error) {
 	getSQL := `
 		SELECT 
-		b.batch_num,b.batch_hash,b.old_state_root,b.state_root,b.old_acc_input_hash,b.acc_input_hash,b.encoded,b.status,b.create_at,o.*
+		b.batch_num,b.batch_hash,b.old_state_root,b.state_root,b.old_acc_input_hash,b.acc_input_hash,
+		b.encoded,b.status,b.create_at,o.*,u.owner,u.account
 		FROM omni.batch b
 		LEFT JOIN omni.operation o ON o.batch_num = b.batch_num 
+		INNER JOIN omni.user u ON o.user_id = u.id 
 		WHERE b.status=$1 AND o.status=$2 AND b.batch_num>=$3 AND b.batch_num<=$4 ORDER BY b.batch_num,o.id ASC;
 	`
 	e := p.getExecQuerier(dbTx)
@@ -168,6 +170,7 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 		var opValue, hashStr, oldStateStr, stateStr, oldAihStr, aihStr, encodeStr, sigStr string
 		var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
 		var updateAt time.Time
+		var ownerStr, accStr string
 		err := rows.Scan(
 			&b.NewNumBatch, &hashStr, &oldStateStr, &stateStr, &oldAihStr, &aihStr, &encodeStr, &b.Status, &b.Timestamp,
 			&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &sigStr, &op.Did, &op.OperationType, &opValue,
@@ -175,15 +178,17 @@ func (p *PostgresStorage) GetBatch(ctx context.Context, status, bs, be uint64, d
 			&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 			&execDestGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
 			&op.InnerExec.MainChainGasLimit, &iexecMainGasPrice, &op.InnerExec.ZkVerificationGasLimit,
-			&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice, &op.TimeAt, &updateAt,
+			&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice, &op.TimeAt, &updateAt, &ownerStr, &accStr,
 		)
 		if err != nil {
 			return nil, err
 		}
+		op.Signature = common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
+		op.Owner = common.HexToAddress(ownerStr)
+		op.Sender = common.HexToAddress(accStr)
 		if opValue == "" {
 			opValue = "0x0"
 		}
-		op.Signature = common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
 		op.OperationValue = (*hexutil.Big)(hex.DecodeBig(opValue))
 		if execMainGasPrice == "" {
 			execMainGasPrice = "0x0"
@@ -240,7 +245,11 @@ func (p *PostgresStorage) UpdateOp(ctx context.Context, opid uint64, col string,
 }
 
 func (p *PostgresStorage) GetPendingOpList(ctx context.Context, l uint64, dbTx pgx.Tx) ([]*state.SignedUserOperation, error) {
-	getSQL := `SELECT * FROM omni.operation WHERE status = $1 ORDER BY id ASC LIMIT $2;`
+	getSQL := `
+		SELECT o.*,u.owner,u.account 
+		FROM omni.operation o INNER JOIN omni.user u ON o.user_id = u.id 
+		WHERE o.status=$1 ORDER BY id ASC LIMIT $2;
+	`
 	e := p.getExecQuerier(dbTx)
 	rows, err := e.Query(ctx, getSQL, state.PendingStatus, l)
 	if err != nil {
@@ -272,46 +281,26 @@ func (p *PostgresStorage) GetPendingOpCount(ctx context.Context, dbTx pgx.Tx) (u
 	return n, nil
 }
 
-func (p *PostgresStorage) GetUserOps(ctx context.Context, uid uint64, dbTx pgx.Tx) ([]*state.UserOperation, error) {
-	getSQL := `SELECT * FROM omni.operation WHERE user_id = $1 ORDER BY id ASC;`
-	e := p.getExecQuerier(dbTx)
-	rows, err := e.Query(ctx, getSQL, uid)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var uos []*state.UserOperation
-	for rows.Next() {
-		uo, err := scanOperation(rows)
-		if err != nil {
-			return nil, err
-		}
-		uos = append(uos, uo.UserOperation)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return uos, nil
-}
-
 func scanOperation(row pgx.Row) (*state.SignedUserOperation, error) {
 	op := &state.SignedUserOperation{}
 	op.UserOperation = &state.UserOperation{}
 	var updateAt time.Time
 	var execMainGasPrice, execDestGasPrice, iexecMainGasPrice, iexecDestGasPrice string
-	var opValue, sigStr string
+	var opValue, sigStr, ownerStr, accStr string
 	err := row.Scan(
 		&op.OpId, &op.Uid, &op.BatchNum, &op.Status, &sigStr, &op.Did, &op.OperationType, &opValue,
 		&op.Phase, &op.Exec.Nonce, &op.Exec.ChainId, &op.Exec.CallData, &op.Exec.MainChainGasLimit,
 		&execMainGasPrice, &op.Exec.ZkVerificationGasLimit, &op.Exec.DestChainGasLimit,
 		&execDestGasPrice, &op.InnerExec.Nonce, &op.InnerExec.ChainId, &op.InnerExec.CallData,
 		&op.InnerExec.MainChainGasLimit, &iexecMainGasPrice, &op.InnerExec.ZkVerificationGasLimit,
-		&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice, &op.TimeAt, &updateAt,
+		&op.InnerExec.DestChainGasLimit, &iexecDestGasPrice, &op.TimeAt, &updateAt, &ownerStr, &accStr,
 	)
 	if err != nil {
 		return nil, err
 	}
 	op.Signature = common.Hex2Bytes(strings.TrimPrefix(sigStr, "0x"))
+	op.Owner = common.HexToAddress(ownerStr)
+	op.Sender = common.HexToAddress(accStr)
 	if opValue == "" {
 		opValue = "0x0"
 	}

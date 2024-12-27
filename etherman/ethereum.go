@@ -2,43 +2,19 @@ package etherman
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"github.com/OAB/etherman/contracts/EntryPoint"
-	"github.com/OAB/etherman/contracts/SyncRouter"
-	"github.com/OAB/lib/common/hexutil"
-	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"math/big"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
-
-const SaltKey = "%d-salt"
-const PendingCreateAAKey = "pending-create-aa-%d"
-
-var (
-	ErrExistAccount = errors.New("account already exists")
-)
-
-type lockUser struct {
-	adr    common.Address
-	salt   uint64
-	timeAt time.Time
-}
-
-var tempUser sync.Map
 
 type EtherMan struct {
 	ctx          context.Context
 	cancel       func()
 	cfg          Config
-	chainsClient map[chains.ChainId]*EthereumClient
+	chainsClient map[uint64]*EthereumClient
 	db           *PostgresStorage
 }
 
@@ -49,7 +25,7 @@ func NewEthereum(ctx context.Context, cfg Config, pg *pgxpool.Pool) (*EtherMan, 
 		ctx:          etherCtx,
 		cancel:       cancel,
 		cfg:          cfg,
-		chainsClient: make(map[chains.ChainId]*EthereumClient, chains.MaxChainInfoLength),
+		chainsClient: make(map[uint64]*EthereumClient, 200),
 		db:           NewPostgresStorage(pg),
 	}
 	var nw = []Network{
@@ -77,150 +53,12 @@ func NewEthereum(ctx context.Context, cfg Config, pg *pgxpool.Pool) (*EtherMan, 
 	return em, nil
 }
 
-func (ether *EtherMan) GetChains() map[chains.ChainId]*EthereumClient {
+func (ether *EtherMan) GetChains() map[uint64]*EthereumClient {
 	return ether.chainsClient
 }
 
-func (ether *EtherMan) GetChainCli(c chains.ChainId) *EthereumClient {
+func (ether *EtherMan) GetChainCli(c uint64) *EthereumClient {
 	return ether.chainsClient[c]
-}
-
-func (ether *EtherMan) EstimateGas(chainID uint64, useFee *big.Int, userOperations []SyncRouter.BaseStructPackedUserOperation) (*big.Int, error) {
-	etherCli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
-	opts := new(bind.CallOpts)
-	opts.From = etherCli.sender
-	log.Infof("EstimateGas destChainId: %d, destContract: %s, userOperations: %+v",
-		chainID, ether.chainsClient[chains.ChainId(chainID)].entryPointAddr, userOperations)
-	return etherCli.syncRouter.FetchOmniMessageFee(
-		opts,
-		chainID,
-		ether.chainsClient[chains.ChainId(chainID)].entryPointAddr,
-		useFee,
-		userOperations,
-	)
-}
-
-func (ether *EtherMan) UpdateEntryPointRoot(proof hexutil.Bytes, batches []EntryPoint.BaseStructBatchData, extraInfo EntryPoint.BaseStructChainsExecuteInfo) (common.Hash, error) {
-	etherCli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
-	opts := etherCli.opAuth
-	/*nonce, err := etherCli.ethClient.NonceAt(context.Background(), opts.From, nil)
-	if err != nil {
-		log.Errorf("get nonce, error: %+v", err)
-		return common.Hash{}, err
-	}
-	opts.Nonce = big.NewInt(0).SetUint64(nonce)
-	gasPrice, err := etherCli.ethClient.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Errorf("get SuggestGasPrice, err: %+v", err)
-		return common.Hash{}, err
-	}*/
-	opts.Nonce = nil
-	opts.GasPrice = nil
-	opts.GasLimit = 0
-	opts.Value = big.NewInt(0)
-	extraInfo.Beneficiary = etherCli.sender
-	log.Infof("VerifyBatches proof: %s, batches: %+v, extraInfo: %+v", proof.String(), batches, extraInfo)
-	tx, err := etherCli.entryPoint.VerifyBatches(&opts, proof, batches, extraInfo)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	log.Infof("verify batch tx: %s", tx.Hash())
-	return tx.Hash(), nil
-}
-
-func (ether *EtherMan) CreateVizingAccount(user common.Address) (*common.Address, uint64, error) {
-	ccli := ether.chainsClient[ether.cfg.VizingNetwork.ChainId]
-	ccli.lock.Lock()
-	defer ccli.lock.Unlock()
-	lockKey := fmt.Sprintf("%s-%d", user.Hex(), ether.cfg.VizingNetwork.ChainId)
-	if u, ok := tempUser.Load(lockKey); ok {
-		lu := u.(lockUser)
-		return &lu.adr, lu.salt, ErrExistAccount
-	}
-	dbTx, err := ether.db.BeginDBTransaction(ether.ctx)
-	if err != nil {
-		log.Errorf("use db transaction err: %+v", err)
-		return nil, 0, err
-	}
-	salt := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), dbTx)
-	log.Infof("[CreateAccount] chainID: %d, salt: %d", ccli.chainID, salt)
-	opts := new(bind.CallOpts)
-	opts.From = ccli.sender
-	adr, err := ccli.aaFactory.GetAccountAddress(opts, user, big.NewInt(0).SetUint64(salt))
-	if err != nil {
-		_ = dbTx.Rollback(ether.ctx)
-		log.Errorf("get create account err: %+v", err)
-		return nil, salt, err
-	}
-	ccli.opAuth.Nonce = nil
-	ccli.opAuth.GasPrice = nil
-	ccli.opAuth.GasLimit = 0
-	ccli.opAuth.Value = big.NewInt(0)
-	_, err = ccli.aaFactory.CreateAccount(&ccli.opAuth, user, big.NewInt(0).SetUint64(salt))
-	if err != nil {
-		_ = dbTx.Rollback(ether.ctx)
-		log.Errorf("chain: %d, user: %s, create account err: %+v",
-			ether.cfg.VizingNetwork.ChainId, user, err)
-		return nil, salt, err
-	}
-	err = ether.db.SetChain(ether.ctx, uint64(ccli.chainID), salt+1, "salt", dbTx)
-	if err != nil {
-		_ = dbTx.Rollback(ether.ctx)
-		log.Errorf("set chain salt err: %+v", err)
-		return nil, salt, err
-	}
-	err = dbTx.Commit(ether.ctx)
-	if err != nil {
-		log.Errorf("db commit err: %+v", err)
-	}
-	log.Infof("==============================")
-	salt2 := ether.db.GetChainSalt(ether.ctx, uint64(ccli.chainID), nil)
-	log.Infof("chainID: %d, check add salt: %d -> %d", ccli.chainID, salt, salt2)
-	log.Infof("==============================")
-	/*for _, cli := range ether.chainsClient {
-		if cli.chainID == ether.cfg.VizingNetwork.ChainId {
-			continue
-		}
-		go ether.pendingCreateAA(PendingData{cli.chainID, user, salt})
-	}*/
-	tempUser.Store(lockKey, lockUser{adr, salt, time.Now()})
-	return &adr, salt, nil
-}
-
-func (ether *EtherMan) CreateOtherAccount(user common.Address, salt, nid uint64) error {
-	return ether.pendingCreateAA(PendingData{chains.ChainId(nid), user, salt})
-}
-
-type PendingData struct {
-	ChainID chains.ChainId
-	User    common.Address
-	Salt    uint64
-}
-
-func (ether *EtherMan) pendingCreateAA(pd PendingData) error {
-	c := ether.chainsClient[pd.ChainID]
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.opAuth.Nonce = nil
-	c.opAuth.GasPrice = nil
-	c.opAuth.GasLimit = 0
-	c.opAuth.Value = big.NewInt(0)
-	tx, err := c.aaFactory.CreateAccount(&c.opAuth, pd.User, big.NewInt(0).SetUint64(pd.Salt))
-	if err != nil {
-		log.Errorf("chain: %d, user: %s, create account err: %+v", c.chainID, pd.User, err)
-		ether.saveFailedCreateAA(pd, false)
-		return err
-	}
-	ether.saveFailedCreateAA(pd, true)
-	log.Infof("create account success, chain: %d, user: %s, tx: %s", c.chainID, pd.User, tx.Hash())
-	return nil
-}
-
-func (ether *EtherMan) saveFailedCreateAA(pd PendingData, isDel bool) {
-	err := ether.db.UpdateUserFailedSalt(ether.ctx, pd.User.String(), uint64(pd.ChainID), isDel, nil)
-	if err != nil {
-		log.Errorf("chain: %d, user: %s, saveFailedCreateAA err: %+v", pd.ChainID, pd.User, err)
-	}
 }
 
 func (ether *EtherMan) Start() {
@@ -252,10 +90,10 @@ func (ether *EtherMan) Start() {
 						}
 						pd := PendingData{
 							User:    common.HexToAddress(ufs.User),
-							ChainID: chains.ChainId(nid),
+							ChainID: nid,
 							Salt:    ufs.Salt,
 						}
-						ok, err := ether.db.IsExistChainByOwner(ether.ctx, ufs.User, uint64(pd.ChainID), nil)
+						ok, err := ether.db.IsExistChainByOwner(ether.ctx, ufs.User, pd.ChainID, nil)
 						if err != nil {
 							log.Errorf("IsExistChainByOwner err: %+v", err)
 							continue
@@ -264,7 +102,7 @@ func (ether *EtherMan) Start() {
 							ether.saveFailedCreateAA(pd, true)
 							continue
 						}
-						_ = ether.pendingCreateAA(pd)
+						_, _ = ether.pendingCreateAA(pd)
 					}
 				}
 			case <-ether.ctx.Done():

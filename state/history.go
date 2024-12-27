@@ -3,11 +3,13 @@ package state
 import (
 	"context"
 	"errors"
-	"github.com/OAB/utils/chains"
+	"fmt"
+	"github.com/OAB/utils"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum/common"
 	ether_types "github.com/ethereum/go-ethereum/core/types"
 	"github.com/jackc/pgx/v4"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -68,7 +70,7 @@ func (h *HistoryManager) scanHis() error {
 	for _, v := range pHis {
 		mTx := v
 		diff := time.Now().Unix() - mTx.TimeAt.Unix()
-		if diff > (2 * 60 * 60) { // 2h
+		if diff > (24*60*60) && mTx.SourceHash != "" && mTx.TargetHash != "" { // 24h
 			_ = h.state.db.UpdateHistory(h.ctx, mTx.ID, map[string]interface{}{"status": CheckFailedStatus}, nil)
 			continue
 		}
@@ -87,7 +89,10 @@ func (h *HistoryManager) scanHis() error {
 }
 
 func (h *HistoryManager) checkHisFromTx(his AccountHistory) {
-	l2Node := h.state.ethereum.GetChainCli(chains.ChainId(his.SourceChain))
+	if his.SourceHash == "" {
+		return
+	}
+	l2Node := h.state.ethereum.GetChainCli(his.SourceChain)
 	tx, isPending, err := l2Node.Cli().TransactionByHash(h.ctx, common.HexToHash(his.SourceHash))
 	if err != nil {
 		log.Errorf("[HistoryManager] error getting txByHash %s. Error: %v", his.SourceHash, err)
@@ -120,27 +125,36 @@ func (h *HistoryManager) checkHisFromCrossTx(his AccountHistory) {
 		_ = h.state.db.UpdateHistory(h.ctx, his.ID, map[string]interface{}{"status": CheckToTxStatus}, nil)
 		return
 	}
-	crossTx := his.SourceHash
-	// TODO get cross chain tx
-	// https://testnet-openapi.vizing.com/sdk/transaction/cross/0x4eab333c440e4d80f6bb22785065d3fee92a3e05dd9d43f6fd754122f7742c9d
+	/*crossTx := his.SourceHash
+	targetTx, err := h.getCrossTx(crossTx, his.SourceChain)
+	if err != nil {
+		log.Errorf("get cross tx err: %+v", err)
+		return
+	}
+	if targetTx == "" {
+		return
+	}
 	dbTx, err := h.state.db.BeginDBTransaction(h.ctx)
 	if err != nil {
 		log.Errorf("use db transaction err: %+v", err)
 		return
 	}
 	err = h.state.db.UpdateHistory(h.ctx, his.ID, map[string]interface{}{
-		"source_hash": crossTx,
+		"source_hash": targetTx,
 		"status":      CheckToTxStatus,
 	}, dbTx)
 	if err != nil {
 		_ = dbTx.Rollback(h.ctx)
 		return
 	}
-	_ = dbTx.Commit(h.ctx)
+	_ = dbTx.Commit(h.ctx)*/
 }
 
 func (h *HistoryManager) checkHisToTx(his AccountHistory) {
-	l2Node := h.state.ethereum.GetChainCli(chains.ChainId(his.TargetChain))
+	if his.TargetHash == "" {
+		return
+	}
+	l2Node := h.state.ethereum.GetChainCli(his.TargetChain)
 	tx, isPending, err := l2Node.Cli().TransactionByHash(h.ctx, common.HexToHash(his.TargetHash))
 	if err != nil {
 		log.Errorf("[HistoryManager] error getting txByHash %s. Error: %v", his.SourceHash, err)
@@ -173,23 +187,29 @@ func (h *HistoryManager) checkHisToCrossTx(his AccountHistory) {
 		_ = h.state.db.UpdateHistory(h.ctx, his.ID, map[string]interface{}{"status": CheckSuccessStatus}, nil)
 		return
 	}
-	crossTx := his.TargetHash
-	// TODO get cross chain tx
-	// https://testnet-openapi.vizing.com/sdk/transaction/cross/0x4eab333c440e4d80f6bb22785065d3fee92a3e05dd9d43f6fd754122f7742c9d
+	/*crossTx := his.TargetHash
+	targetTx, err := h.getCrossTx(crossTx, his.TargetChain)
+	if err != nil {
+		log.Errorf("get cross tx err: %+v", err)
+		return
+	}
+	if targetTx == "" {
+		return
+	}
 	dbTx, err := h.state.db.BeginDBTransaction(h.ctx)
 	if err != nil {
 		log.Errorf("use db transaction err: %+v", err)
 		return
 	}
 	err = h.state.db.UpdateHistory(h.ctx, his.ID, map[string]interface{}{
-		"target_hash": crossTx,
+		"target_hash": targetTx,
 		"status":      CheckSuccessStatus,
 	}, dbTx)
 	if err != nil {
 		_ = dbTx.Rollback(h.ctx)
 		return
 	}
-	_ = dbTx.Commit(h.ctx)
+	_ = dbTx.Commit(h.ctx)*/
 }
 
 func (h *HistoryManager) UpdateAccountHis(uid uint64, did string, m map[string]interface{}) error {
@@ -217,4 +237,58 @@ func (h *HistoryManager) SaveAccountHis(data *AccountHistory) error {
 	}
 	err = h.state.db.AddUserHis(h.ctx, data, nil)
 	return err
+}
+
+const Cross_FAILED = 97
+const Cross_SUCCESS = 99
+
+type TxStatus struct {
+	Status  string       `json:"status"`
+	Message string       `json:"message"`
+	Result  []ResultData `json:"result"`
+}
+
+type ResultData struct {
+	SourceChain  string    `json:"sourceChain"`
+	SourceId     string    `json:"sourceId"`
+	SourceAmount string    `json:"sourceAmount"`
+	SourceSymbol string    `json:"sourceSymbol"`
+	SourceTime   time.Time `json:"sourceTime"`
+	TargetChain  string    `json:"targetChain"`
+	TargetId     string    `json:"targetId"`
+	TargetAmount string    `json:"targetAmount"`
+	TargetSymbol string    `json:"targetSymbol"`
+	TargetTime   time.Time `json:"targetTime"`
+	Status       int       `json:"status"`
+}
+
+func (h *HistoryManager) getCrossTx(tx string, tId uint64) (string, error) {
+	r := utils.NewHTTPCli()
+	ret, err := r.Get(h.cfg.CrossChainAPI + tx)
+	if err != nil {
+		return "", err
+	}
+	retRes := &TxStatus{}
+	err = ret.Parse(retRes)
+	if err != nil {
+		return "", err
+	}
+	log.Debugf("cross tx result: %+v", retRes)
+	if retRes.Status != "success" {
+		return "", fmt.Errorf("cross error")
+	}
+	for _, rd := range retRes.Result {
+		if strconv.Itoa(int(tId)) == rd.TargetChain {
+			targetHash := ""
+			hashs := strings.Split(rd.TargetId, "-")
+			if len(hashs) > 0 {
+				targetHash = hashs[0]
+			}
+			if targetHash == "" || targetHash[:2] != "0x" || len(targetHash) < 30 {
+				continue
+			}
+			return targetHash, nil
+		}
+	}
+	return "", nil
 }

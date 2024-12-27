@@ -3,7 +3,6 @@ package etherman
 import (
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SimpleAccountFactory"
-	"github.com/OAB/utils/chains"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,7 +55,7 @@ type Block struct {
 }
 
 type AccountCreateData struct {
-	ChainID chains.ChainId
+	ChainID uint64
 	Account common.Address
 	Owner   common.Address
 }
@@ -74,7 +73,7 @@ type DepositData struct {
 	Account common.Address
 	Amount  *big.Int
 	TxHash  string
-	ChainID chains.ChainId
+	ChainID uint64
 }
 
 func ToVizingDepositData(evt *EntryPoint.EntryPointDepositTicketAdded) DepositData {

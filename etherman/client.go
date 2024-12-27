@@ -7,7 +7,7 @@ import (
 	"github.com/OAB/etherman/contracts/EntryPoint"
 	"github.com/OAB/etherman/contracts/SimpleAccountFactory"
 	"github.com/OAB/etherman/contracts/SyncRouter"
-	"github.com/OAB/utils/chains"
+	"github.com/OAB/etherman/contracts/ZKVizingAADataHelp"
 	"github.com/OAB/utils/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -32,7 +32,7 @@ var (
 
 type EthereumClient struct {
 	cfg            Network
-	chainID        chains.ChainId
+	chainID        uint64
 	ethClient      ethClientInterface
 	entryPointAddr common.Address
 	entryPoint     *EntryPoint.EntryPoint
@@ -40,6 +40,7 @@ type EthereumClient struct {
 	aaFactory      *SimpleAccountFactory.SimpleAccountFactory
 	syncRouterAddr common.Address
 	syncRouter     *SyncRouter.SyncRouter
+	dataHelp       *ZKVizingAADataHelp.ZKVizingAADataHelp
 	sender         common.Address
 	opAuth         bind.TransactOpts
 	lock           sync.Mutex
@@ -54,17 +55,22 @@ func NewClient(cfg Network) (*EthereumClient, error) {
 
 	entryPoint, err := EntryPoint.NewEntryPoint(cfg.EntryPoint, ethClient)
 	if err != nil {
-		return nil, fmt.Errorf("chainID: %d, failed to init entryPoint: %v", cfg.ChainId, err)
+		return nil, fmt.Errorf("chainID: %d, failed to init entryPoint smc: %v", cfg.ChainId, err)
 	}
 
 	accountFactory, err := SimpleAccountFactory.NewSimpleAccountFactory(cfg.AccountFactory, ethClient)
 	if err != nil {
-		return nil, fmt.Errorf("chainID: %d, failed to init simple account factory: %v", cfg.ChainId, err)
+		return nil, fmt.Errorf("chainID: %d, failed to init simple account factory smc: %v", cfg.ChainId, err)
 	}
 
 	syncRouter, err := SyncRouter.NewSyncRouter(cfg.SyncRouter, ethClient)
 	if err != nil {
-		return nil, fmt.Errorf("chainID: %d, failed to init sync router: %v", cfg.ChainId, err)
+		return nil, fmt.Errorf("chainID: %d, failed to init sync router smc: %v", cfg.ChainId, err)
+	}
+
+	dataHelp, err := ZKVizingAADataHelp.NewZKVizingAADataHelp(cfg.DataHelp, ethClient)
+	if err != nil {
+		return nil, fmt.Errorf("chainID: %d, failed to init data help smc: %v", cfg.ChainId, err)
 	}
 
 	return &EthereumClient{
@@ -77,6 +83,7 @@ func NewClient(cfg Network) (*EthereumClient, error) {
 		aaFactory:      accountFactory,
 		syncRouterAddr: cfg.SyncRouter,
 		syncRouter:     syncRouter,
+		dataHelp:       dataHelp,
 	}, nil
 }
 
@@ -308,6 +315,10 @@ func (c *EthereumClient) Cli() ethClientInterface {
 
 func (c *EthereumClient) IsNeedSync() bool {
 	return !(c.cfg.IsSync == 0)
+}
+
+func (c *EthereumClient) GetBlockCheckNum() uint64 {
+	return c.cfg.BlockCheckNum
 }
 
 func (c *EthereumClient) EthBlockByNumber(ctx context.Context, blockNumber uint64) (*types.Block, error) {

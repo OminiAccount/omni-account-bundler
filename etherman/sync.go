@@ -2,7 +2,6 @@ package etherman
 
 import (
 	"context"
-	"github.com/OAB/utils/chains"
 	"github.com/OAB/utils/log"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"time"
@@ -26,7 +25,8 @@ type ClientSynchronizer struct {
 	etherCli       *EthereumClient
 	db             *PostgresStorage
 	genBlockNumber uint64
-	networkID      chains.ChainId
+	blockCheckNum  uint64
+	networkID      uint64
 	synced         bool
 
 	acFunc  AccountCreateFunc
@@ -37,12 +37,14 @@ type ClientSynchronizer struct {
 }
 
 func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumClient,
-	acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc, wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
+	acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc,
+	wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
 		db:             NewPostgresStorage(db),
 		etherCli:       etherCli,
 		ctx:            ctx,
 		genBlockNumber: etherCli.cfg.GenBlockNumber,
+		blockCheckNum:  etherCli.GetBlockCheckNum(),
 		networkID:      etherCli.chainID,
 		acFunc:         acFunc,
 		vdpFunc:        vdpFunc,
@@ -50,8 +52,8 @@ func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumCl
 		wtFunc:         wtFunc,
 		eoFunc:         eoFunc,
 	}
-	cliSync.db.AddChainHeight(ctx, uint64(cliSync.networkID), nil)
-	lastBlockSync := cliSync.db.GetChainHeight(ctx, uint64(cliSync.networkID), nil)
+	cliSync.db.AddChainHeight(ctx, cliSync.networkID, nil)
+	lastBlockSync := cliSync.db.GetChainHeight(ctx, cliSync.networkID, nil)
 	if lastBlockSync > cliSync.genBlockNumber {
 		cliSync.genBlockNumber = lastBlockSync
 	}
@@ -60,9 +62,9 @@ func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumCl
 		if err != nil || header == nil {
 			log.Fatal("networkID: %d, error getting latest block from. Error: %+v", cliSync.networkID, err)
 		}
-		cliSync.genBlockNumber = header.Number.Uint64()
+		cliSync.genBlockNumber = header.Number.Uint64() - cliSync.blockCheckNum
 	}
-	_ = cliSync.db.SetChain(ctx, uint64(cliSync.networkID), cliSync.genBlockNumber, "block_id", nil)
+	_ = cliSync.db.SetChain(ctx, cliSync.networkID, cliSync.genBlockNumber, "block_id", nil)
 	return cliSync, nil
 }
 
@@ -70,7 +72,7 @@ var waitDuration = time.Second
 
 func (s *ClientSynchronizer) Sync() {
 	log.Infof("NetworkID: %d, Synchronization started", s.networkID)
-	lastBlockSynced := s.db.GetChainHeight(s.ctx, uint64(s.networkID), nil)
+	lastBlockSynced := s.db.GetChainHeight(s.ctx, s.networkID, nil)
 	if lastBlockSynced < 1 {
 		log.Errorf("networkID: %d, unexpected error getting the latest block.", s.networkID)
 		return
@@ -80,7 +82,7 @@ func (s *ClientSynchronizer) Sync() {
 		select {
 		case <-s.ctx.Done():
 			log.Infof("NetworkID: %d, synchronizer ctx done", s.networkID)
-			_ = s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
+			_ = s.db.SetChain(s.ctx, s.networkID, lastBlockSynced, "block_id", nil)
 			return
 		case <-time.After(waitDuration):
 			log.Infof("NetworkID: %d, syncing...", s.networkID)
@@ -89,14 +91,14 @@ func (s *ClientSynchronizer) Sync() {
 			if err != nil {
 				log.Errorf("networkID: %d, error syncing blocks: %+v", s.networkID, err)
 			}
-			_ = s.db.SetChain(s.ctx, uint64(s.networkID), lastBlockSynced, "block_id", nil)
+			_ = s.db.SetChain(s.ctx, s.networkID, lastBlockSynced, "block_id", nil)
 			if !s.synced {
 				header, err := s.etherCli.Cli().HeaderByNumber(s.ctx, nil)
 				if err != nil {
 					log.Errorf("networkID: %d, error getting latest block from. Error: %s", s.networkID, err.Error())
 					continue
 				}
-				lastKnownBlock := header.Number.Uint64()
+				lastKnownBlock := header.Number.Uint64() - s.blockCheckNum
 				if lastBlockSynced >= lastKnownBlock && !s.synced {
 					log.Infof("NetworkID %d Synced!", s.networkID)
 					waitDuration = time.Second * 20
@@ -117,20 +119,20 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 		log.Error(err)
 		return lastBlockSynced, err
 	}
-	lastKnownBlock := header.Number
+	lastKnownBlock := header.Number.Uint64() - s.blockCheckNum
 
 	var fromBlock uint64
 	if lastBlockSynced > 0 {
 		fromBlock = lastBlockSynced + 1
 	}
-	if fromBlock > lastKnownBlock.Uint64() {
+	if fromBlock > lastKnownBlock {
 		log.Infof("NetworkID: %d, block synced, from block: %d, last new block: %d", s.networkID, fromBlock, lastKnownBlock)
 		return lastBlockSynced, nil
 	}
 	for {
 		toBlock := fromBlock + SyncChunkSize
-		if toBlock > lastKnownBlock.Uint64() {
-			toBlock = lastKnownBlock.Uint64()
+		if toBlock > lastKnownBlock {
+			toBlock = lastKnownBlock
 		}
 		if fromBlock > toBlock {
 			break
@@ -147,7 +149,7 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 		}
 		_ = s.processBlockRange(blocks)
 		lastBlockSynced = toBlock
-		if lastKnownBlock.Uint64() <= toBlock {
+		if lastKnownBlock <= toBlock {
 			if !s.synced {
 				log.Infof("NetworkID %d Synced!", s.networkID)
 				waitDuration = time.Second * 20
