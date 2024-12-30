@@ -16,7 +16,7 @@ type StateInterface interface {
 	GetAccountInfo(common.Address, common.Address) (*state.AccountInfo, error)
 	GetAccountInfoByChain(common.Address, uint64) (*state.AccountInfo, error)
 	GetAccountOps(uid uint64) ([]*state.UserOperation, error)
-	GetUser(user common.Address) *state.AccountInfo
+	GetUser(user, account common.Address) *state.AccountInfo
 	AddSignedUserOp(*state.AccountInfo, *state.SignedUserOperation) error
 	CreateVizingAccount(common.Address) *common.Address
 	CreateOtherAccount(common.Address, uint64, uint64)

@@ -24,6 +24,8 @@ var (
 	ErrStorageNotFound = errors.New("not found in the Storage")
 	// ErrNilDBTransaction indicates the db transaction has not been properly initialized
 	ErrNilDBTransaction = errors.New("database transaction not properly initialized")
+
+	ZeroAddress = "0x0000000000000000000000000000000000000000"
 )
 
 // PostgresStorage implements the Storage interface.
@@ -204,17 +206,31 @@ func (p *PostgresStorage) GetUserInfoByChain(ctx context.Context, owner string, 
 	return nil, nil
 }
 
-func (p *PostgresStorage) GetUser(ctx context.Context, owner string, dbTx pgx.Tx) (*AccountInfo, error) {
-	const getSQL = `SELECT id,owner,account,salt FROM omni.user WHERE owner = $1 ORDER BY id ASC LIMIT 1;`
+func (p *PostgresStorage) GetUser(ctx context.Context, owner, account string, dbTx pgx.Tx) (*AccountInfo, error) {
+	getSQL := "SELECT id,owner,account,salt FROM omni.user WHERE "
+	var where []interface{}
+	if owner != ZeroAddress {
+		getSQL += "owner = $1"
+		where = append(where, strings.ToLower(owner))
+	}
+	if account != ZeroAddress {
+		if len(where) > 0 {
+			getSQL += "AND account = $2"
+		} else {
+			getSQL += "account = $1"
+		}
+		where = append(where, strings.ToLower(account))
+	}
+	getSQL += " ORDER BY id ASC LIMIT 1;"
 	e := p.getExecQuerier(dbTx)
 	var ai AccountInfo
 	var ownerStr, accStr string
-	err := e.QueryRow(ctx, getSQL, strings.ToLower(owner)).Scan(&ai.Uid, &ownerStr, &accStr, &ai.Salt)
+	err := e.QueryRow(ctx, getSQL, where...).Scan(&ai.Uid, &ownerStr, &accStr, &ai.Salt)
 	if err != nil {
 		return nil, err
 	}
 	if ai.Uid < 1 {
-		return nil, ErrStorageNotFound
+		return nil, pgx.ErrNoRows
 	}
 	ai.User = common.HexToAddress(ownerStr)
 	ai.Account = common.HexToAddress(accStr)
@@ -283,15 +299,15 @@ func scanOperation(row pgx.Row) (*UserOperation, error) {
 	return op, nil
 }
 
-func (p *PostgresStorage) GetSigleUserOp(ctx context.Context, account,
+func (p *PostgresStorage) GetSigleUserOp(ctx context.Context, owner, account,
 	did string, status int, dbTx pgx.Tx) (*UserOperation, error) {
 	const getSQL = `
 		SELECT o.* FROM omni.user u 
 		LEFT JOIN omni.operation o ON o.user_id = u.id 
-		WHERE u.account = $1 AND o.did = $2 AND o.status = $3 LIMIT 1;
+		WHERE u.owner = $1 AND u.account = $2 AND o.did = $3 AND o.status = $4 LIMIT 1;
 	`
 	e := p.getExecQuerier(dbTx)
-	row := e.QueryRow(ctx, getSQL, strings.ToLower(account), did, status)
+	row := e.QueryRow(ctx, getSQL, strings.ToLower(owner), strings.ToLower(account), did, status)
 	uo, err := scanOperation(row)
 	log.Infof("%+v", uo)
 	return uo, err

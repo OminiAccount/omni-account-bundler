@@ -1,7 +1,8 @@
 package synchronizer
 
-import "github.com/OAB/etherman"
+import "github.com/OAB/utils/apitypes"
 
 type Config struct {
-	EthereumCfg etherman.Config
+	SyncInterval  apitypes.Duration `mapstructure:"sync-interval"`
+	SyncChunkSize uint64            `mapstructure:"sync-chunk-size"`
 }

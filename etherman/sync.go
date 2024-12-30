@@ -2,13 +2,11 @@ package etherman
 
 import (
 	"context"
+	"github.com/OAB/utils/apitypes"
 	"github.com/OAB/utils/log"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"time"
 )
-
-const SyncChunkSize = 100
-const LevalDBNotFound = "leveldb: not found"
 
 type AccountCreateFunc func(acc AccountCreateData)
 type DepositFunc func(acc DepositData)
@@ -28,6 +26,8 @@ type ClientSynchronizer struct {
 	blockCheckNum  uint64
 	networkID      uint64
 	synced         bool
+	syncInterval   apitypes.Duration
+	syncChunkSize  uint64
 
 	acFunc  AccountCreateFunc
 	vdpFunc DepositFunc
@@ -36,11 +36,13 @@ type ClientSynchronizer struct {
 	eoFunc  ExecOpFunc
 }
 
-func NewSynchronizer(ctx context.Context, db *pgxpool.Pool, etherCli *EthereumClient,
-	acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc,
+func NewSynchronizer(ctx context.Context, si apitypes.Duration, scs uint64, db *pgxpool.Pool,
+	etherCli *EthereumClient, acFunc AccountCreateFunc, vdpFunc DepositFunc, dpFunc DepositFunc,
 	wtFunc WithdrawFunc, eoFunc ExecOpFunc) (Synchronizer, error) {
 	cliSync := &ClientSynchronizer{
 		db:             NewPostgresStorage(db),
+		syncInterval:   si,
+		syncChunkSize:  scs,
 		etherCli:       etherCli,
 		ctx:            ctx,
 		genBlockNumber: etherCli.cfg.GenBlockNumber,
@@ -101,7 +103,7 @@ func (s *ClientSynchronizer) Sync() {
 				lastKnownBlock := header.Number.Uint64() - s.blockCheckNum
 				if lastBlockSynced >= lastKnownBlock && !s.synced {
 					log.Infof("NetworkID %d Synced!", s.networkID)
-					waitDuration = time.Second * 20
+					waitDuration = s.syncInterval.Duration
 					s.synced = true
 				}
 			}
@@ -130,7 +132,7 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 		return lastBlockSynced, nil
 	}
 	for {
-		toBlock := fromBlock + SyncChunkSize
+		toBlock := fromBlock + s.syncChunkSize
 		if toBlock > lastKnownBlock {
 			toBlock = lastKnownBlock
 		}
@@ -152,7 +154,7 @@ func (s *ClientSynchronizer) syncBlocks(lastBlockSynced uint64) (uint64, error) 
 		if lastKnownBlock <= toBlock {
 			if !s.synced {
 				log.Infof("NetworkID %d Synced!", s.networkID)
-				waitDuration = time.Second * 20
+				waitDuration = s.syncInterval.Duration
 				s.synced = true
 			}
 			break

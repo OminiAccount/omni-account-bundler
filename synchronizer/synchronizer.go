@@ -7,10 +7,12 @@ import (
 	"github.com/OAB/state"
 	"github.com/OAB/synchronizer/types"
 	"github.com/OAB/utils/log"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type Synchronizer struct {
+	cfg       Config
 	ether     types.EthereumInterface
 	pool      types.PoolInterface
 	state     types.StateInterface
@@ -19,10 +21,11 @@ type Synchronizer struct {
 	db        *PostgresStorage
 }
 
-func NewSynchronizer(ctx context.Context, ethereum types.EthereumInterface, p types.PoolInterface,
+func NewSynchronizer(ctx context.Context, c Config, ethereum types.EthereumInterface, p types.PoolInterface,
 	state types.StateInterface, pg *pgxpool.Pool) (*Synchronizer, error) {
 	syncCtx, cancel := context.WithCancel(ctx)
 	return &Synchronizer{
+		cfg:       c,
 		ether:     ethereum,
 		pool:      p,
 		state:     state,
@@ -73,6 +76,7 @@ func (s *Synchronizer) Start() {
 			},
 			Status: state.SuccessStatus,
 		})
+		uoHis.From.Address = dp.User.Hex()
 		err = s.state.GetHisIns().SaveAccountHis(&uoHis)
 		if err != nil {
 			log.Errorf("add account(%s, %s) history error: %v", dp.User, dp.Account, err)
@@ -80,7 +84,12 @@ func (s *Synchronizer) Start() {
 	}
 	vdpFunc := func(dp etherman.DepositData) {
 		log.Infof("sync to a new vizing deposit ticket, data: %+v", dp)
-		ticker, err := s.state.GetSignedUserOp(dp.User, dp.Account, dp.Did, state.NormalStatus)
+		ai := s.state.GetUser(common.Address{}, dp.Account)
+		if ai == nil {
+			log.Error("not found user info")
+			return
+		}
+		ticker, err := s.state.GetSignedUserOp(ai.User, dp.Account, dp.Did, state.NormalStatus)
 		if err != nil {
 			log.Errorf("get deposit operation, err: %+v", err)
 			return
@@ -174,7 +183,13 @@ func (s *Synchronizer) Start() {
 		if !cli.IsNeedSync() {
 			continue
 		}
-		chainSync, err := etherman.NewSynchronizer(s.ctx, s.db.GetPool(), cli, acFunc, vdpFunc, dpFunc, wtFunc, eoFunc)
+		chainSync, err := etherman.NewSynchronizer(
+			s.ctx,
+			s.cfg.SyncInterval,
+			s.cfg.SyncChunkSize,
+			s.db.GetPool(),
+			cli,
+			acFunc, vdpFunc, dpFunc, wtFunc, eoFunc)
 		if err != nil {
 			log.Fatal(err.Error())
 		}

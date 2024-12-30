@@ -20,6 +20,7 @@ type (
 		GetSignedUserOp(common.Address, common.Address, string, int) (*state.SignedUserOperation, error)
 		GetHisIns() *state.HistoryManager
 		GetAccountInfo(user, account common.Address) (*state.AccountInfo, error)
+		GetUser(user, account common.Address) *state.AccountInfo
 	}
 
 	PoolInterface interface {

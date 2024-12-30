@@ -39,6 +39,10 @@ block-check-num = 0
 host = "0.0.0.0"
 port = 8100
 
+[synchronizer]
+sync-interval = "20s"
+sync-chunk-size = 100
+
 [pool]
 max-ops = 2
 max-batches = 2

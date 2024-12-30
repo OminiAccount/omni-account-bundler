@@ -232,7 +232,7 @@ func (s *State) createUserHis(op *UserOperation) {
 		uoHis.From.Value = hex.EncodeBig(decodeParams.AmountIn)
 		uoHis.From.Token.Address = decodeParams.TokenIn.Hex()
 		uoHis.To.Address = decodeParams.Receiver.Hex()
-		uoHis.To.Value = ""
+		uoHis.To.Value = "0x0"
 		uoHis.To.Token.Address = decodeParams.TokenOut.Hex()
 	case TrueMarketBuy, TrueMarketSell:
 	}
@@ -289,15 +289,15 @@ func (s *State) UpdateUserOpPhase(opid uint64, phase int, dbTx pgx.Tx) error {
 }
 
 func (s *State) GetSignedUserOp(user, account common.Address, did string, status int) (*SignedUserOperation, error) {
-	op, err := s.db.GetSigleUserOp(s.ctx, account.Hex(), did, status, nil)
+	op, err := s.db.GetSigleUserOp(s.ctx, user.Hex(), account.Hex(), did, status, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &SignedUserOperation{UserOperation: op}, nil
 }
 
-func (s *State) GetUser(user common.Address) *AccountInfo {
-	ai, err := s.db.GetUser(s.ctx, user.Hex(), nil)
+func (s *State) GetUser(user, account common.Address) *AccountInfo {
+	ai, err := s.db.GetUser(s.ctx, user.Hex(), account.Hex(), nil)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			log.Errorf("GetUser, user: %s, get user err: %+v", user, err)

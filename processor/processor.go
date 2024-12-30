@@ -68,7 +68,7 @@ func NewProcessor(cfg *config.Config) (*Processor, error) {
 	log.Info("Pool successfully initialized")
 
 	// Synchronizer
-	sync, err := synchronizer.NewSynchronizer(ctx, ethereum, poolIns, st, storage)
+	sync, err := synchronizer.NewSynchronizer(ctx, cfg.Sync, ethereum, poolIns, st, storage)
 	if err != nil {
 		return nil, err
 	}

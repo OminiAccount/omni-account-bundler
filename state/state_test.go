@@ -15,6 +15,9 @@ import (
 )
 
 func TestDepositDid(t *testing.T) {
+	user := common.Address{}
+	t.Log(user.Hex())
+
 	sender := common.HexToAddress("0x3307c5023677a4c085855117fa8bbce765e9246f")
 	chainID := hexutil.Uint64(28516)
 	nonce := hexutil.Uint64(3)

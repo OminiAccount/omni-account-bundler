@@ -80,10 +80,10 @@ func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) in
 		return err
 	}
 	if ai == nil {
-		u := e.state.GetUser(user)
+		u := e.state.GetUser(user, common.Address{})
 		if u == nil || u.Uid < 0 {
 			_ = e.state.CreateVizingAccount(user)
-			u = e.state.GetUser(user)
+			u = e.state.GetUser(user, common.Address{})
 		}
 		if u == nil {
 			return fmt.Errorf("create account failed")
@@ -97,7 +97,7 @@ func (e *EthEndpoints) CreateUserAccount(user common.Address, chainId uint64) in
 }
 
 func (e *EthEndpoints) GetUserAccount(user common.Address) interface{} {
-	ai := e.state.GetUser(user)
+	ai := e.state.GetUser(user, common.Address{})
 	if ai == nil || ai.Uid < 0 {
 		return e.state.CreateVizingAccount(user)
 	}
@@ -130,8 +130,14 @@ func (e *EthEndpoints) GetAccountInfo(user, account common.Address, chainId uint
 }
 
 func (e *EthEndpoints) ReportHis(user, account common.Address, data state.AccountHistory) error {
-	accInfo := e.state.GetUser(user)
-	if accInfo == nil || accInfo.Uid < 1 || accInfo.Account.Hex() != account.Hex() {
+	if !e.state.IsSupportChain(data.SourceChain) {
+		return fmt.Errorf("chain:%d no support", data.SourceChain)
+	}
+	if !e.state.IsSupportChain(data.TargetChain) {
+		return fmt.Errorf("chain:%d no support", data.TargetChain)
+	}
+	accInfo := e.state.GetUser(user, account)
+	if accInfo == nil || accInfo.Uid < 1 {
 		return fmt.Errorf("account not exist")
 	}
 	data.Uid = accInfo.Uid
@@ -146,7 +152,7 @@ func (e *EthEndpoints) ReportHis(user, account common.Address, data state.Accoun
 }
 
 func (e *EthEndpoints) GetUserHistory(user, account common.Address, timestamp uint64) (interface{}, error) {
-	ai := e.state.GetUser(user)
+	ai := e.state.GetUser(user, common.Address{})
 	if ai == nil || ai.Uid < 1 || ai.Account.Hex() != account.Hex() {
 		return nil, fmt.Errorf("account not exist")
 	}

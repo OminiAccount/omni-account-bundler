@@ -7,6 +7,7 @@ import (
 	"github.com/OAB/jsonrpc"
 	"github.com/OAB/pool"
 	"github.com/OAB/state"
+	"github.com/OAB/synchronizer"
 	"github.com/OAB/utils/log"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
@@ -20,12 +21,13 @@ const FlagCfg = "config"
 
 // Config represents the `env.toml` file used to configure the processor
 type Config struct {
-	Ethereum etherman.Config    `mapstructure:"ethereum"`
-	JsonRpc  jsonrpc.RpcsConfig `mapstructure:"jsonrpc"`
-	Pool     pool.Config        `mapstructure:"pool"`
-	State    state.Config       `mapstructure:"state"`
-	Log      log.Config         `mapstructure:"log"`
-	Db       pgstorage.Config   `mapstructure:"database"`
+	Ethereum etherman.Config     `mapstructure:"ethereum"`
+	JsonRpc  jsonrpc.RpcsConfig  `mapstructure:"jsonrpc"`
+	Sync     synchronizer.Config `mapstructure:"synchronizer"`
+	Pool     pool.Config         `mapstructure:"pool"`
+	State    state.Config        `mapstructure:"state"`
+	Log      log.Config          `mapstructure:"log"`
+	Db       pgstorage.Config    `mapstructure:"database"`
 }
 
 // Default parses the default configuration values.
